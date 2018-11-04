@@ -1,5 +1,7 @@
-import {migrationOriginDest, countryCode} from './utils';
+import React from 'react';
+import { render } from 'react-dom';
 
-//test run with the data
-migrationOriginDest.then(d => console.log(d));
-countryCode.then(d => console.log(d));
+import './style.css';
+import App from './components/App';
+
+render(<App />, document.getElementById('root'));
