@@ -1,10 +1,10 @@
 import React, {Component} from 'react';
 import * as THREE from 'three';
-import {geoCentroid} from 'd3';
+import {extent,scaleLog,scaleLinear} from 'd3';
 const OrbitControls = require('three-orbitcontrols');
 const TWEEN = require('tween.js');
 
-import {countryISO, countryJSON, generateSpline, project} from '../utils';
+import {countryISO, countryJSON, generateSpline, project, zipJSON} from '../utils';
 
 class GLWrapper extends Component{
 
@@ -13,6 +13,7 @@ class GLWrapper extends Component{
 		super(props);
 
 		this._initScene = this._initScene.bind(this); 
+		this._updateAttributes = this._updateAttributes.bind(this);
 		this._animate = this._animate.bind(this);
 
 		this.state = {
@@ -35,6 +36,7 @@ class GLWrapper extends Component{
 		//GL: meshes
 		this.globeMesh = null;
 		this.pathMesh = null;
+		this.particles = null;
 
 		//Constants and utilities
 		this.R0 = 10; //radius of earth
@@ -80,32 +82,14 @@ class GLWrapper extends Component{
 		Promise.all([
 			countryISO,
 			countryJSON
-		]).then(([iso, json]) => {
-			//zip geojson features with iso code
-			console.groupCollapsed('GLWrapper:componentDidMount:zip json with iso');
-			const features = json.features.map(f => {
-				const {ISO_A3, ADMIN} = f.properties;
-				const code = iso.get(ISO_A3);
-
-				if(!code){
-					console.log(`Code for ${ADMIN}/${ISO_A3} not found`);
-				}else{
-					f.properties.ISO_CODE = code;
-				}
-
-				return f;
+		])
+			.then(zipJSON)
+			.then(([geojson, centroids]) => {
+				this.setState({
+					geojson,
+					centroids
+				});
 			});
-			console.groupEnd();
-
-			//Produce a centroid lookup
-			const centroids = new Map(features.map(f => [f.properties.ISO_CODE, geoCentroid(f)]));
-			
-			//Set data states
-			this.setState({
-				geojson: features,
-				centroids
-			});
-		});
 
 	}
 
@@ -139,21 +123,45 @@ class GLWrapper extends Component{
 		//Requires: props.data (migration data), state.geojson, state.centroids
 		//TODO: regeneration should only occur when data has changed
 		if(data && geojson && centroids){
-			//Generate line segments points for the paths
-			const pathPoints = data
+			//Generate splines
+			const splines = data
 				.map(d => [centroids.get(d.originCode), centroids.get(d.destCode)]) //Zip data (migration OD) with centroids
-				.map(d => this.splineGenerator(...d).getPoints(32-1)) //transform to points along splines
+				.map(d => this.splineGenerator(...d)); //splines
+
+			//Generate position attribute data for path
+			const pathPositions = splines
+				.map(spline => spline.getPoints(32-1))
 				.reduce((acc,val) => acc.concat(val), []); //flatten
+
+			//Generate position attribute data for particles
+			//TODO
+			const MAX_PARTICLE_PER_PATH = 32;
+			const vRange = extent(data, d => d.v);
+			const particle_per_path = scaleLog().domain(vRange).range([1,MAX_PARTICLE_PER_PATH]).clamp(true);
+			const particlePositions = data.map((d,i) => {
+					const spline = splines[i];
+					const {p0,p1,c0,c1} = spline; //THREE.Vector3
+					const {v:value} = d; //migration figure
+
+					const n = Math.round(particle_per_path(value));
+					return spline.getPoints(n);
+				})
+				.reduce((acc,val) => acc.concat(val), []);
 
 			//Update this.pathMesh 
 			const pathPositionAttribute = this.pathMesh.geometry.getAttribute('position');
-			pathPositionAttribute.copyVector3sArray(pathPoints);
+			pathPositionAttribute.copyVector3sArray(pathPositions);
 			pathPositionAttribute.needsUpdate = true;
+
+			//Update this.particles
+			const particlePositionAttribute = this.particles.geometry.getAttribute('position');
+			particlePositionAttribute.copyVector3sArray(particlePositions);
+			particlePositionAttribute.needsUpdate = true;
 		}
 
-		//Update camera location based on country in focus
+		//Update camera location based on props.country
 		if(centroids && country){
-			const o = [20,-10];
+			const o = [45,-15];
 			const c = centroids.get(country);
 			//new camera location
 			const cameraPosition = project(
@@ -201,18 +209,32 @@ class GLWrapper extends Component{
 		//Set up this.pathMesh
 		const pathGeometry = new THREE.BufferGeometry();
 		pathGeometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(255*32*3),3));
-		
 		this.pathMesh = new THREE.Line(
 			pathGeometry,
 			new THREE.LineBasicMaterial({
 				color: 0xffffff,
 				transparent: true,
-				opacity: 0.3
+				opacity: 0.2
 			})
+		);
+
+		//Set up this.particles
+		const particlesGeometry = new THREE.BufferGeometry();
+		particlesGeometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(255*32*3),3));
+		const particlesMaterial = new THREE.PointsMaterial({color: 0xffffff});
+		particlesMaterial.size = 0.2;
+		this.particles = new THREE.Points(
+			particlesGeometry,
+			particlesMaterial
 		);
 
 		this.scene.add(this.globeMesh);
 		this.scene.add(this.pathMesh);
+		this.scene.add(this.particles);
+
+	}
+
+	_updateAttributes(){
 
 	}
 

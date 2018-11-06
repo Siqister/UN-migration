@@ -1,4 +1,4 @@
-import {csv,json,scaleLinear,geoInterpolate} from 'd3';
+import {csv,json,scaleLinear,geoInterpolate,geoCentroid} from 'd3';
 import * as THREE from 'three';
 
 //Data utilities
@@ -23,6 +23,30 @@ export const countryISO = fetchData(
 	data => new Map(data)
 );
 export const countryJSON = json(COUNTRY_GEOJSON_URL);
+
+//Utility function for zipping ISO code with JSON
+//Returns augmented GeoJSON and centroid lookup
+export const zipJSON = ([iso, json]) => {
+	console.groupCollapsed('Zip json with iso');
+	const features = json.features.map(f => {
+		const {ISO_A3, ADMIN} = f.properties;
+		const code = iso.get(ISO_A3);
+
+		if(!code){
+			console.log(`Code for ${ADMIN}/${ISO_A3} not found`);
+		}else{
+			f.properties.ISO_CODE = code;
+		}
+
+		return f;
+	});
+	console.groupEnd();
+
+	//Produce a centroid lookup
+	const centroids = new Map(features.map(f => [f.properties.ISO_CODE, geoCentroid(f)]));
+
+	return [features, centroids];
+}
 
 //Parse function for UN migration dataset
 function parseMigration(d){
@@ -67,9 +91,6 @@ function parseCountryISO(d){
 	]
 
 }
-
-//Parse function for geojson
-
 
 //Data transform function for generating origin-destination pairs from data, countryCode Map, year, and source country
 export function transformToOD(data, countryCode, originCode, year){
