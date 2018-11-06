@@ -5,6 +5,7 @@ const OrbitControls = require('three-orbitcontrols');
 const TWEEN = require('tween.js');
 
 import {countryISO, countryJSON, generateSpline, project, zipJSON} from '../utils';
+import {particleVS, particleFS} from '../shaders';
 
 class GLWrapper extends Component{
 
@@ -41,6 +42,8 @@ class GLWrapper extends Component{
 		//Constants and utilities
 		this.R0 = 10; //radius of earth
 		this.R1 = 22; //max radius of bezier curve control points
+		this.MAX_PARTICLE_PER_PATH = 32;
+		this.MAX_PATH = 255;
 		this.splineGenerator = generateSpline(this.R0, this.R1);
 
 		//Initialize meshes and add these to scene
@@ -133,30 +136,31 @@ class GLWrapper extends Component{
 				.map(spline => spline.getPoints(32-1))
 				.reduce((acc,val) => acc.concat(val), []); //flatten
 
-			//Generate position attribute data for particles
-			//TODO
-			const MAX_PARTICLE_PER_PATH = 32;
+			//Generate attribute data for particles
 			const vRange = extent(data, d => d.v);
-			const particle_per_path = scaleLog().domain(vRange).range([1,MAX_PARTICLE_PER_PATH]).clamp(true);
-			const particlePositions = data.map((d,i) => {
+			const particlesPerPath = scaleLinear()
+				.domain(vRange)
+				.range([2, this.MAX_PARTICLE_PER_PATH])
+				.clamp(true);
+			const particleData = data.map((od,i) => {
 					const spline = splines[i];
 					const {p0,p1,c0,c1} = spline; //THREE.Vector3
-					const {v:value} = d; //migration figure
-
-					const n = Math.round(particle_per_path(value));
-					return spline.getPoints(n);
+					const {v:value} = od; //migration figure
+					const n = Math.round(particlesPerPath(value));
+					
+					return Array.from({length:n}).map((d,j) => {
+						const t = 1/n * j;
+						return {
+							p0,p1,c0,c1,
+							t,
+							position: spline.getPoint(t)
+						}
+					});
 				})
 				.reduce((acc,val) => acc.concat(val), []);
 
-			//Update this.pathMesh 
-			const pathPositionAttribute = this.pathMesh.geometry.getAttribute('position');
-			pathPositionAttribute.copyVector3sArray(pathPositions);
-			pathPositionAttribute.needsUpdate = true;
+			this._updateAttributes(pathPositions, particleData);
 
-			//Update this.particles
-			const particlePositionAttribute = this.particles.geometry.getAttribute('position');
-			particlePositionAttribute.copyVector3sArray(particlePositions);
-			particlePositionAttribute.needsUpdate = true;
 		}
 
 		//Update camera location based on props.country
@@ -203,7 +207,7 @@ class GLWrapper extends Component{
 		//Set up this.globeMesh
 		this.globeMesh = new THREE.Mesh(
 			new THREE.SphereBufferGeometry(this.R0, 32, 32),
-			new THREE.MeshNormalMaterial()
+			new THREE.MeshBasicMaterial({color: 0x000000})
 		);
 
 		//Set up this.pathMesh
@@ -214,27 +218,72 @@ class GLWrapper extends Component{
 			new THREE.LineBasicMaterial({
 				color: 0xffffff,
 				transparent: true,
-				opacity: 0.2
+				opacity: 0.15
 			})
 		);
 
 		//Set up this.particles
 		const particlesGeometry = new THREE.BufferGeometry();
 		particlesGeometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(255*32*3),3));
-		const particlesMaterial = new THREE.PointsMaterial({color: 0xffffff});
-		particlesMaterial.size = 0.2;
+		particlesGeometry.addAttribute('p0', new THREE.BufferAttribute(new Float32Array(255*32*3), 3));
+		particlesGeometry.addAttribute('p1', new THREE.BufferAttribute(new Float32Array(255*32*3), 3));
+		particlesGeometry.addAttribute('c0', new THREE.BufferAttribute(new Float32Array(255*32*3), 3));
+		particlesGeometry.addAttribute('c1', new THREE.BufferAttribute(new Float32Array(255*32*3), 3));
+		particlesGeometry.addAttribute('t', new THREE.BufferAttribute(new Float32Array(255*32*1), 1));
+		particlesGeometry.addAttribute('s', new THREE.BufferAttribute(new Float32Array(255*32*1), 1));
+		const particlesMaterial = new THREE.RawShaderMaterial({
+			vertexShader: particleVS,
+			fragmentShader: particleFS,
+			uniforms:{
+				tOffset: {value: 0.0}
+			}
+		});
 		this.particles = new THREE.Points(
 			particlesGeometry,
 			particlesMaterial
 		);
-
 		this.scene.add(this.globeMesh);
 		this.scene.add(this.pathMesh);
 		this.scene.add(this.particles);
 
 	}
 
-	_updateAttributes(){
+	_updateAttributes(pathPositions, particleData){
+			//Update this.pathMesh 
+			const pathPositionAttribute = this.pathMesh.geometry.getAttribute('position');
+			pathPositionAttribute.copyVector3sArray(pathPositions);
+			pathPositionAttribute.needsUpdate = true;
+
+			//Update this.particles
+			const particlePositions = particleData.map(d => d.position);
+			const particlePositionAttribute = this.particles.geometry.getAttribute('position');
+			particlePositionAttribute.copyVector3sArray(particlePositions);
+			particlePositionAttribute.needsUpdate = true;
+
+			const particleP0 = particleData.map(d => d.p0);
+			const particleP0Attribute = this.particles.geometry.getAttribute('p0');
+			particleP0Attribute.copyVector3sArray(particleP0);
+			particleP0Attribute.needsUpdate = true;
+
+			const particleP1 = particleData.map(d => d.p1);
+			const particleP1Attribute = this.particles.geometry.getAttribute('p1');
+			particleP1Attribute.copyVector3sArray(particleP1);
+			particleP1Attribute.needsUpdate = true;
+
+			const particleC0 = particleData.map(d => d.c0);
+			const particleC0Attribute = this.particles.geometry.getAttribute('c0');
+			particleC0Attribute.copyVector3sArray(particleC0);
+			particleC0Attribute.needsUpdate = true;
+
+			const particleC1 = particleData.map(d => d.c1);
+			const particleC1Attribute = this.particles.geometry.getAttribute('c1');
+			particleC1Attribute.copyVector3sArray(particleC1);
+			particleC1Attribute.needsUpdate = true;
+
+			const particleT = particleData.map(d => d.t);
+			const particleTAttribute = this.particles.geometry.getAttribute('t');
+			particleTAttribute.copyArray(particleT);
+			particleTAttribute.needsUpdate = true;
 
 	}
 
@@ -245,6 +294,10 @@ class GLWrapper extends Component{
 			this.camera
 		);
 
+		//Update time-based uniform values
+		this.particles.material.uniforms.tOffset.value = Date.now()/6000%1;
+
+		//Update TWEEN
 		TWEEN.update();
 
 		requestAnimationFrame(this._animate);
