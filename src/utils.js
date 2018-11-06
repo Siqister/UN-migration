@@ -1,5 +1,7 @@
-import {csv,json} from 'd3';
+import {csv,json,scaleLinear,geoInterpolate} from 'd3';
+import * as THREE from 'three';
 
+//Data utilities
 const MIGRATION_DATA_URL = './data/UN_MigrantStockByOriginAndDestination_2017/Table 1-Table 1.csv';
 const COUNTRY_CODE_URL = './data/UN_MigrantStockByOriginAndDestination_2017/ANNEX-Table 1.csv';
 const COUNTRY_ISO_URL = './data/country-codes.csv';
@@ -17,7 +19,8 @@ export const countryCode = fetchData(
 );
 export const countryISO = fetchData(
 	COUNTRY_ISO_URL,
-	parseCountryISO
+	parseCountryISO,
+	data => new Map(data)
 );
 export const countryJSON = json(COUNTRY_GEOJSON_URL);
 
@@ -58,11 +61,10 @@ function parseCountryCode(d){
 //Parse function for countries ISO code table
 function parseCountryISO(d){
 
-	return {
-		alpha3: d['ISO3166-1-Alpha-3'],
-		name: d['official_name_en'],
-		code: +d['ISO3166-1-numeric']
-	}
+	return [
+		d['ISO3166-1-Alpha-3'],
+		+d['ISO3166-1-numeric']
+	]
 
 }
 
@@ -90,5 +92,57 @@ export function transformToOD(data, countryCode, originCode, year){
 	})).filter(od => od.destCode && od.v > 0);
 
 	return ODData;
+
+}
+
+
+//Geo utilities
+//Project lngLat to 3D coordinates
+export const project = (lngLat, r) => {
+	const [lng, lat] = lngLat;
+	//theta: incline from z-direction, [0, Math.PI]
+	const theta = -(lat - 90)/180*Math.PI;
+	//phi: azimuthal from positive x axis [0, Math.PI * 2]
+	const phi = (lng + 180)/360 * Math.PI * 2;
+	//console.log(theta/Math.PI, phi/Math.PI);
+	return new THREE.Vector3(
+		- r * Math.sin(theta) * Math.cos(phi),
+		r * Math.cos(theta),
+		r * Math.sin(theta) * Math.sin(phi)
+	);
+}
+
+//convert origin destination pair to 3D spline
+export const generateSpline = (r0, r1) => {
+
+	const altitudeScale = scaleLinear()
+		.domain([9, r0 * 2]) //euclidean distance between two vectors in 3D space
+		.range([r0 * 1.1, r1])
+		.clamp(true);
+
+	//returns: THREE.Spline()
+	return (lngLat0, lngLat1) => {
+		//https://medium.com/@xiaoyangzhao/drawing-curves-on-webgl-globe-using-three-js-and-d3-draft-7e782ffd7ab
+		//Determine "lofting" altitude based on distance between p0 and p1
+		const p0 = project(lngLat0, r0);
+		const p1 = project(lngLat1, r0);
+		const r = altitudeScale(p0.distanceTo(p1));
+
+		//Generate two control points
+		const interpolate = geoInterpolate(lngLat0, lngLat1);
+		const c0 = project(interpolate(0.25), r);
+		const c1 = project(interpolate(0.75), r);
+
+		//Generate CubicBezier 3D spline
+		const spline =  new THREE.CubicBezierCurve3(p0, c0, c1, p1);
+
+		//TODO: avoid adding custom properties to spline object
+		spline.p0 = p0;
+		spline.p1 = p1;
+		spline.c0 = c0;
+		spline.c1 = c1;
+
+		return spline;
+	}
 
 }

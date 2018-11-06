@@ -38,6 +38,8 @@
     "d3": "^5.7.0",
     "react": "^16.6.0",
     "react-dom": "^16.6.0",
-    "three": "^0.98.0"
+    "three": "^0.98.0",
+    "three-orbitcontrols": "^2.96.3",
+    "tween.js": "^16.6.0"
   }
 }
