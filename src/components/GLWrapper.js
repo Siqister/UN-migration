@@ -5,7 +5,7 @@ const OrbitControls = require('three-orbitcontrols');
 const TWEEN = require('tween.js');
 
 import {countryISO, countryJSON, generateSpline, project, zipJSON} from '../utils';
-import {particleVS, particleFS} from '../shaders';
+import {particleVS, particleFS, quadVS, finalPassFS, particlesPassFS} from '../shaders';
 
 class GLWrapper extends Component{
 
@@ -30,14 +30,27 @@ class GLWrapper extends Component{
 		this.cameraPosition = [0,0,40];
 
 		//GL: internal variables
-		this.renderer = null;
 		this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500); //default parameters
-		this.scene = new THREE.Scene();
 		this.orbitControls = null;
+		//4x WebGL render targets and 1x WebGL renderer
+		this.renderTargetGlobe = new THREE.WebGLRenderTarget(0,0);
+		this.renderTargetParticle = new THREE.WebGLRenderTarget(0,0);
+		this.tempFBO = [
+			new THREE.WebGLRenderTarget(0,0),
+			new THREE.WebGLRenderTarget(0,0)
+		];
+		this.currentCompositeTargetIdx = 0;
+		//4x scenes (1 for path+globe, 1 for current particles, 1 for particle pass, 1 for final compositing)
+		this.sceneGlobe = new THREE.Scene();
+		this.sceneParticles = new THREE.Scene();
+		this.sceneParticlesPass = new THREE.Scene();
+		this.sceneFinalPass = new THREE.Scene();
 		//GL: meshes
 		this.globeMesh = null;
 		this.pathMesh = null;
 		this.particles = null;
+		this.particlesPassQuad = null; 
+		this.finalPassQuad = null;
 
 		//Constants and utilities
 		this.R0 = 10; //radius of earth
@@ -115,6 +128,11 @@ class GLWrapper extends Component{
 		//When props.width and props.height passed in, set renderer size
 		if(width && height){
 			this.renderer.setSize(width, height);
+			this.renderTargetGlobe.setSize(width, height);
+			this.renderTargetParticle.setSize(width, height);
+			this.tempFBO.forEach(target => {
+				target.setSize(width, height);
+			});
 
 			this.camera.aspect = width/height;
 			this.camera.position.fromArray(this.cameraPosition); 
@@ -140,7 +158,7 @@ class GLWrapper extends Component{
 			const vRange = extent(data, d => d.v);
 			const particlesPerPath = scaleLinear()
 				.domain(vRange)
-				.range([2, this.MAX_PARTICLE_PER_PATH])
+				.range([3, this.MAX_PARTICLE_PER_PATH])
 				.clamp(true);
 			const particleData = data.map((od,i) => {
 					const spline = splines[i];
@@ -199,11 +217,9 @@ class GLWrapper extends Component{
 		const {cameraLookat} = this.state;
 
 		//Initialize camera
-		this.scene.add(this.camera);
 		this.camera.position.fromArray(this.cameraPosition);
 		this.camera.lookAt(new THREE.Vector3(...cameraLookat));
 
-		//SET UP MESHES
 		//Set up this.globeMesh
 		this.globeMesh = new THREE.Mesh(
 			new THREE.SphereBufferGeometry(this.R0, 32, 32),
@@ -242,10 +258,50 @@ class GLWrapper extends Component{
 			particlesGeometry,
 			particlesMaterial
 		);
-		this.scene.add(this.globeMesh);
-		this.scene.add(this.pathMesh);
-		this.scene.add(this.particles);
 
+		//Set up this.finalPassQuad
+		const quadGeometry = new THREE.BufferGeometry();
+  	quadGeometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array([-1,-1,-1,1,1,1,1,-1]), 2));
+  	quadGeometry.addAttribute('uv', new THREE.BufferAttribute(new Float32Array([0,0,0,1,1,1,1,0]), 2));
+  	quadGeometry.setIndex(new THREE.BufferAttribute(new Uint16Array([3,1,0,3,2,1]),1));
+  	
+  	const finalPassQuadMaterial = new THREE.RawShaderMaterial({
+  		vertexShader: quadVS,
+  		fragmentShader: finalPassFS,
+  		uniforms:{
+  			tGlobe: {value: this.renderTargetGlobe.texture },
+  			tParticleComposite: {value: this.tempFBO[0].texture },
+  		}
+  	});
+  	this.finalPassQuad = new THREE.Mesh(
+  		quadGeometry,
+  		finalPassQuadMaterial
+  	);
+
+  	//Set up this.particlesPassQuad
+  	const particlesPassQuadMaterial = new THREE.RawShaderMaterial({
+  		vertexShader: quadVS,
+  		fragmentShader: particlesPassFS,
+  		uniforms:{
+  			tCurrent: {value: this.renderTargetParticle.texture },
+  			tPrev: {value: this.tempFBO[1].texture }
+  		}
+  	});
+  	this.particlesPassQuad = new THREE.Mesh(
+  		quadGeometry,
+  		particlesPassQuadMaterial
+  	);
+
+		//Initialize scenes with the correct meshes
+		this.sceneGlobe.add(this.globeMesh);
+		this.sceneGlobe.add(this.pathMesh);
+
+		this.sceneParticles.add(this.globeMesh.clone());
+		this.sceneParticles.add(this.particles);
+
+		this.sceneParticlesPass.add(this.particlesPassQuad);
+
+		this.sceneFinalPass.add(this.finalPassQuad);
 	}
 
 	_updateAttributes(pathPositions, particleData){
@@ -289,10 +345,44 @@ class GLWrapper extends Component{
 
 	_animate(){
 
+		//Perform individual render passes
+		//First pass renders globe and lines
 		this.renderer.render(
-			this.scene,
+			this.sceneGlobe,
+			this.camera,
+			this.renderTargetGlobe,
+			true
+		);
+
+		//Second pass renders current particles
+		this.renderer.render(
+			this.sceneParticles,
+			this.camera,
+			this.renderTargetParticle,
+			true
+		);
+
+		//Compose current particles and past particles into composite particles
+		const compositeTarget = this.tempFBO[this.currentCompositeTargetIdx];
+		const prevTarget = this.tempFBO[(this.currentCompositeTargetIdx+1)%2];
+
+		this.particlesPassQuad.material.uniforms.tPrev.value = prevTarget.texture;
+		this.renderer.render(
+			this.sceneParticlesPass,
+			this.camera,
+			compositeTarget,
+			true
+		);
+
+		//Compose globe and particles
+		this.finalPassQuad.material.uniforms.tParticleComposite.value = compositeTarget.texture;
+		this.renderer.render(
+			this.sceneFinalPass,
 			this.camera
 		);
+
+		//Finally, flip 
+		this.currentCompositeTargetIdx = (this.currentCompositeTargetIdx + 1)%2;
 
 		//Update time-based uniform values
 		this.particles.material.uniforms.tOffset.value = Date.now()/6000%1;
