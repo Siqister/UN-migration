@@ -61,8 +61,19 @@ class GLWrapper extends Component{
 		this.canvasWorld = document.createElement('canvas');
 		this.canvasWorld.width = 4096;
 		this.canvasWorld.height = 2048;
-		this.canvasWorldCtx = this.canvasWorld.getContext('2d');
 		this.canvasWorldTexture = new THREE.CanvasTexture(this.canvasWorld);
+		this.canvasWorldOffscreen = ("OffscreenCanvas" in window)?this.canvasWorld.transferControlToOffscreen():null;
+		this.offscreenCanvasWorker = new OffscreenCanvasWorker();
+		//If using offscreen rendering, set up worker behavior
+		if(this.canvasWorldOffscreen){
+			this.offscreenCanvasWorker.postMessage(
+				{canvas:this.canvasWorldOffscreen}, [this.canvasWorldOffscreen]);
+			this.offscreenCanvasWorker.onmessage = m => {
+					console.log(m);
+					this.canvasWorldTexture.needsUpdate = true;
+				}
+		}
+		
 
 		//Constants and utilities
 		this.R0 = 10; //radius of earth
@@ -129,13 +140,13 @@ class GLWrapper extends Component{
 		const {width, height, data, country} = this.props;
 		const {cameraLookat, geojson, centroids} = this.state;
 
-		console.group('GLWrapper : componentDidUpdate');
-		console.log(width);
-		console.log(height);
-		console.log(data);
-		console.log(geojson);
-		console.log(centroids);
-		console.groupEnd();
+		// console.group('GLWrapper : componentDidUpdate');
+		// console.log(width);
+		// console.log(height);
+		// console.log(data);
+		// console.log(geojson);
+		// console.log(centroids);
+		// console.groupEnd();
 
 		//When props.width and props.height passed in, set renderer size
 		if(width && height){
@@ -208,11 +219,10 @@ class GLWrapper extends Component{
 
 		//Redraw canvas-based textures
 		if(geojson){
-			//Render world map to this.canvasWorld
-			//Also updates this.canvasWorldTexture
-			//TODO: do this offscreen
-			renderMap(this.canvasWorldCtx, geojson);
-			this.canvasWorldTexture.needsUpdate = true;
+
+			if(this.canvasWorldOffscreen){
+				this.offscreenCanvasWorker.postMessage({geojson});
+			}
 		}
 
 	}

@@ -31,20 +31,20 @@ export const countryJSON = json(COUNTRY_GEOJSON_URL);
 //Utility function for zipping ISO code with JSON
 //Returns augmented GeoJSON and centroid lookup
 export const zipJSON = ([iso, json]) => {
-	console.groupCollapsed('Zip json with iso');
+	//console.groupCollapsed('Zip json with iso');
 	const features = json.features.map(f => {
 		const {ISO_A3, ADMIN} = f.properties;
 		const code = iso.get(ISO_A3);
 
 		if(!code){
-			console.log(`Code for ${ADMIN}/${ISO_A3} not found`);
+			//console.log(`Code for ${ADMIN}/${ISO_A3} not found`);
 		}else{
 			f.properties.ISO_CODE = code;
 		}
 
 		return f;
 	});
-	console.groupEnd();
+	//console.groupEnd();
 
 	//Produce a centroid lookup
 	const centroids = new Map(features.map(f => [f.properties.ISO_CODE, geoCentroid(f)]));

@@ -1,7 +1,22 @@
-let i = 0;
+import {renderMap} from './utils';
 
-postMessage(i);
+let ctx = null;
+let w;
+let h;
 
 onmessage = function(e){
-	postMessage(++i);
+	
+	const {canvas, geojson} = e.data;
+	
+	if(canvas){
+		ctx = canvas.getContext('2d');
+		w = canvas.width;
+		h = canvas.height;
+	}
+
+	if(geojson && ctx){
+		renderMap(ctx, geojson, w, h);
+		postMessage('Map render complete');
+	}
+
 }
