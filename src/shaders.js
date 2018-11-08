@@ -1,3 +1,29 @@
+export const globeVS = `
+	varying vec2 v_uv;
+
+	void main(){
+		gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+		v_uv = uv;
+	}
+`;
+
+export const globeFS = `
+	precision mediump float;
+
+	varying vec2 v_uv;
+	uniform float uUseTexture;
+	uniform sampler2D tSampler;
+
+	void main(){
+		vec3 color = vec3(0.0,0.0,0.0);
+		if(uUseTexture > 0.0){
+			//color = vec3(1.0,0.0,0.0);
+			color = texture2D(tSampler, v_uv).rgb;
+		}
+		gl_FragColor = vec4(color,1.0);
+	}
+`;
+
 export const particleVS = `
 	uniform mat4 projectionMatrix;
 	uniform mat4 modelViewMatrix;

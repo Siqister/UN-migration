@@ -4,8 +4,13 @@ import {extent,scaleLog,scaleLinear} from 'd3';
 const OrbitControls = require('three-orbitcontrols');
 const TWEEN = require('tween.js');
 
-import {countryISO, countryJSON, generateSpline, project, zipJSON} from '../utils';
-import {particleVS, particleFS, quadVS, finalPassFS, particlesPassFS} from '../shaders';
+const OffscreenCanvasWorker = require('worker-loader!../offscreenCanvasWorker');
+
+import {countryISO, countryJSON, generateSpline, project, zipJSON, renderMap} from '../utils';
+import {
+	globeVS, globeFS,
+	particleVS, particleFS, 
+	quadVS, finalPassFS, particlesPassFS} from '../shaders';
 
 class GLWrapper extends Component{
 
@@ -26,7 +31,7 @@ class GLWrapper extends Component{
 			cameraLookat: [0,0,0]
 		};
 
-		//GL: state, used instead of react state to avoid unnecessary updating
+		//GL animation state, used instead of react state to avoid unnecessary updating
 		this.cameraPosition = [0,0,40];
 
 		//GL: internal variables
@@ -51,6 +56,13 @@ class GLWrapper extends Component{
 		this.particles = null;
 		this.particlesPassQuad = null; 
 		this.finalPassQuad = null;
+
+		//Canvas for rendering globe textures
+		this.canvasWorld = document.createElement('canvas');
+		this.canvasWorld.width = 4096;
+		this.canvasWorld.height = 2048;
+		this.canvasWorldCtx = this.canvasWorld.getContext('2d');
+		this.canvasWorldTexture = new THREE.CanvasTexture(this.canvasWorld);
 
 		//Constants and utilities
 		this.R0 = 10; //radius of earth
@@ -147,14 +159,14 @@ class GLWrapper extends Component{
 			//Generate splines
 			const splines = data
 				.map(d => [centroids.get(d.originCode), centroids.get(d.destCode)]) //Zip data (migration OD) with centroids
-				.map(d => this.splineGenerator(...d)); //splines
+				.map(d => this.splineGenerator(...d)); 
 
-			//Generate position attribute data for path
+			//Generate position attribute data for this.pathMesh from splines
 			const pathPositions = splines
 				.map(spline => spline.getPoints(32-1))
 				.reduce((acc,val) => acc.concat(val), []); //flatten
 
-			//Generate attribute data for particles
+			//Generate attributes for this.particles
 			const vRange = extent(data, d => d.v);
 			const particlesPerPath = scaleLinear()
 				.domain(vRange)
@@ -194,6 +206,15 @@ class GLWrapper extends Component{
 				.start();
 		}
 
+		//Redraw canvas-based textures
+		if(geojson){
+			//Render world map to this.canvasWorld
+			//Also updates this.canvasWorldTexture
+			//TODO: do this offscreen
+			renderMap(this.canvasWorldCtx, geojson);
+			this.canvasWorldTexture.needsUpdate = true;
+		}
+
 	}
 
 	render(){
@@ -214,6 +235,9 @@ class GLWrapper extends Component{
 
 	_initScene(){
 
+		//Initialize scenes, camera, and meshes; runes only once on component constructor
+		//Subsequent component updates will only modify the attributes of these meshes
+
 		const {cameraLookat} = this.state;
 
 		//Initialize camera
@@ -223,7 +247,14 @@ class GLWrapper extends Component{
 		//Set up this.globeMesh
 		this.globeMesh = new THREE.Mesh(
 			new THREE.SphereBufferGeometry(this.R0, 32, 32),
-			new THREE.MeshBasicMaterial({color: 0x000000})
+			new THREE.ShaderMaterial({
+				vertexShader:globeVS,
+				fragmentShader:globeFS,
+				uniforms:{
+					uUseTexture:{value:0.0},
+					tSampler:{value:this.canvasWorldTexture}
+				}
+			})
 		);
 
 		//Set up this.pathMesh
@@ -293,14 +324,14 @@ class GLWrapper extends Component{
   	);
 
 		//Initialize scenes with the correct meshes
+		//globe and path
 		this.sceneGlobe.add(this.globeMesh);
 		this.sceneGlobe.add(this.pathMesh);
-
+		//particles
 		this.sceneParticles.add(this.globeMesh.clone());
 		this.sceneParticles.add(this.particles);
-
+		//Pos processing passes
 		this.sceneParticlesPass.add(this.particlesPassQuad);
-
 		this.sceneFinalPass.add(this.finalPassQuad);
 	}
 
@@ -347,6 +378,7 @@ class GLWrapper extends Component{
 
 		//Perform individual render passes
 		//First pass renders globe and lines
+		this.globeMesh.material.uniforms.uUseTexture.value = 1.0;
 		this.renderer.render(
 			this.sceneGlobe,
 			this.camera,
@@ -355,6 +387,7 @@ class GLWrapper extends Component{
 		);
 
 		//Second pass renders current particles
+		this.globeMesh.material.uniforms.uUseTexture.value = 0.0;
 		this.renderer.render(
 			this.sceneParticles,
 			this.camera,
@@ -381,7 +414,7 @@ class GLWrapper extends Component{
 			this.camera
 		);
 
-		//Finally, flip 
+		//Finally, flip the two tempFBO
 		this.currentCompositeTargetIdx = (this.currentCompositeTargetIdx + 1)%2;
 
 		//Update time-based uniform values

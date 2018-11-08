@@ -1,4 +1,8 @@
-import {csv,json,scaleLinear,geoInterpolate,geoCentroid} from 'd3';
+import {
+	csv,json,
+	scaleLinear,
+	geoInterpolate,geoCentroid,geoEquirectangular,geoPath
+} from 'd3';
 import * as THREE from 'three';
 
 //Data utilities
@@ -116,7 +120,6 @@ export function transformToOD(data, countryCode, originCode, year){
 
 }
 
-
 //Geo utilities
 //Project lngLat to 3D coordinates
 export const project = (lngLat, r) => {
@@ -166,4 +169,30 @@ export const generateSpline = (r0, r1) => {
 		return spline;
 	}
 
+}
+
+//2D geo utilities
+//Utility function for rendering a map to canvas2DContext
+const projection = geoEquirectangular();
+export const renderMap = (ctx, json, width=4096, height=2048) => {
+	projection
+		.fitExtent([[0,0], [width,height]], {
+			type:"FeatureCollection",
+			features:json
+		}) //fit the world
+		.center([0,0])
+		.translate([width/2,height/2]);
+
+	//Set up geoPath object
+	const path = geoPath(projection, ctx);
+
+	//Render pixels
+	ctx.fillStyle = 'rgb(0,0,0)';
+	ctx.fillRect(0, 0, width, height)
+	ctx.strokeStyle = 'rgb(255,255,255)'
+	ctx.beginPath();
+	json.forEach(d => {
+		path(d);
+	})
+	ctx.stroke();
 }
