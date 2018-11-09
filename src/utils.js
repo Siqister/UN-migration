@@ -5,32 +5,42 @@ import {
 } from 'd3';
 import * as THREE from 'three';
 
-//Data utilities
 const MIGRATION_DATA_URL = './data/UN_MigrantStockByOriginAndDestination_2017/Table 1-Table 1.csv';
 const COUNTRY_CODE_URL = './data/UN_MigrantStockByOriginAndDestination_2017/ANNEX-Table 1.csv';
 const COUNTRY_ISO_URL = './data/country-codes.csv';
 const COUNTRY_GEOJSON_URL = './data/countries.geojson';
 
-export const fetchData = (url, parse, ...transforms) => 
-	transforms.concat(d => d).reduce((acc, transform) => acc.then(transform), csv(url, parse));
+//DATA UTILITIES
+const fetchData = (url, parse, ...transforms) => 
+	transforms.concat(d => d).reduce((p, transform) => p.then(transform), csv(url, parse));
+export {fetchData}
 
-export const migrationOriginDest = fetchData(MIGRATION_DATA_URL, parseMigration, data => data.filter(d => d.code < 900));
-export const countryCode = fetchData(
-	COUNTRY_CODE_URL, 
-	parseCountryCode, 
-	data => data.filter(d => d[1] < 900), 
-	data => new Map(data)
-);
-export const countryISO = fetchData(
-	COUNTRY_ISO_URL,
-	parseCountryISO,
-	data => new Map(data)
-);
-export const countryJSON = json(COUNTRY_GEOJSON_URL);
+//Zip origin destination data with countryCode
+const zipDataToCode = ([data, code]) => {
 
-//Utility function for zipping ISO code with JSON
-//Returns augmented GeoJSON and centroid lookup
-export const zipJSON = ([iso, json]) => {
+	const ODData = [];
+
+	data.forEach(o => {
+		const od = o.dest
+			.filter(d => d.v > 0)
+			.map(d => ({
+				origin: o.origin,
+				originCode: code.get(o.origin),
+				dest: d.geographyName,
+				destCode: code.get(d.geographyName),
+				v: d.v,
+				year: o.year
+			}))
+			.filter(od => od.originCode && od.destCode);
+
+		ODData.push(...od);
+	});
+
+	return ODData;
+}
+
+//Zip numerical ISO code with geojson; returns augmented GeoJSON and centroid lookup
+const zipJSON = ([iso, json]) => {
 	console.groupCollapsed('Zip json with iso');
 	const features = json.features.map(f => {
 		const {ISO_A3, ADMIN} = f.properties;
@@ -51,6 +61,37 @@ export const zipJSON = ([iso, json]) => {
 
 	return [features, centroids];
 }
+export {zipJSON}
+
+//DATA PROMISES
+const migrationOriginDest = fetchData(
+	MIGRATION_DATA_URL, 
+	parseMigration, 
+	data => data.filter(d => d.code < 900)
+);
+export {migrationOriginDest}
+
+const countryCode = fetchData(
+	COUNTRY_CODE_URL, 
+	parseCountryCode, 
+	data => data.filter(d => d[1] < 900), 
+	data => new Map(data)
+);
+export {countryCode}
+
+const ODData = Promise.all([migrationOriginDest, countryCode])
+	.then(zipDataToCode);
+export {ODData};
+
+const countryISO = fetchData(
+	COUNTRY_ISO_URL,
+	parseCountryISO,
+	data => new Map(data)
+);
+export {countryISO}
+
+const countryJSON = json(COUNTRY_GEOJSON_URL);
+export {countryJSON}
 
 //Parse function for UN migration dataset
 function parseMigration(d){
@@ -96,31 +137,7 @@ function parseCountryISO(d){
 
 }
 
-//Data transform function for generating origin-destination pairs from data, countryCode Map, year, and source country
-export function transformToOD(data, countryCode, originCode, year){
-
-	if(!data || !countryCode) return null;
-
-	const origin = data.filter(d => d.code === originCode && d.year === year)[0];
-	if(!origin){
-		console.error(`Country code ${originCode} not found for year ${year}`);
-		return null;
-	}
-
-	//transform to array of OD pairs
-	const ODData = origin.dest.map(destination => ({
-		origin: origin.origin,
-		originCode,
-		dest: destination.geographyName, 
-		destCode: countryCode.get(destination.geographyName),
-		v: destination.v
-	})).filter(od => od.destCode && od.v > 0);
-
-	return ODData;
-
-}
-
-//Geo utilities
+//3D geo utilities
 //Project lngLat to 3D coordinates
 export const project = (lngLat, r) => {
 	const [lng, lat] = lngLat;
@@ -146,6 +163,8 @@ export const generateSpline = (r0, r1) => {
 
 	//returns: THREE.Spline()
 	return (lngLat0, lngLat1) => {
+
+		if(!lngLat0 || !lngLat1) return;
 		//https://medium.com/@xiaoyangzhao/drawing-curves-on-webgl-globe-using-three-js-and-d3-draft-7e782ffd7ab
 		//Determine "lofting" altitude based on distance between p0 and p1
 		const p0 = project(lngLat0, r0);

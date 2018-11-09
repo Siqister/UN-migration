@@ -2,9 +2,7 @@ import React, {Component} from 'react';
 
 //Data utilities
 import { 
-	migrationOriginDest,
-	countryCode,
-	transformToOD
+	ODData
 } from '../utils';
 
 //Components
@@ -20,10 +18,8 @@ class App extends Component{
 		this.state = {
 			width: 0,
 			height: 0,
-			country: null,
 			data: null,
-			countryCode: null,
-			country: 840, //Default to US
+			country: 422, //Default to US
 			year: 2017, //Default to 2017
 		}
 
@@ -45,28 +41,30 @@ class App extends Component{
 		});
 
 		//Request data
-		Promise.all([
-				migrationOriginDest,
-				countryCode
-			]).then(([data, countryCode]) => {
-				this.setState({data, countryCode});
+		ODData.then(data => {
+				this.setState({data});
 			});
 
 	}
 
 	render(){
 
-		const {data,countryCode,country,year,width,height} = this.state;
+		const {data,country,year,width,height} = this.state;
 
 		//Compute derived data
-		const ODData = transformToOD(data, countryCode, country, year);
+		let glData = null;
+		if(data){
+			glData = data.filter(d => 
+				d.year === year && (d.originCode === country || d.destCode === country)
+			);
+		}
 
 		return (
 			<div className='app' ref={ node => {this.appNode = node;}}>
 				<GLWrapper
 					width={width}
 					height={height}
-					data={ODData}
+					data={glData}
 					country={country}
 				/>
 			</div>

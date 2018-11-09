@@ -1,10 +1,9 @@
 import React, {Component} from 'react';
 import * as THREE from 'three';
 import {extent,scaleLog,scaleLinear} from 'd3';
+import uniq from 'lodash/uniq';
 const OrbitControls = require('three-orbitcontrols');
 const TWEEN = require('tween.js');
-
-const OffscreenCanvasWorker = require('worker-loader!../offscreenCanvasWorker');
 
 import {countryISO, countryJSON, generateSpline, project, zipJSON, renderMap} from '../utils';
 import {
@@ -19,6 +18,7 @@ class GLWrapper extends Component{
 		super(props);
 
 		this._initScene = this._initScene.bind(this); 
+		this._generateParticleData = this._generateParticleData.bind(this);
 		this._updateAttributes = this._updateAttributes.bind(this);
 		this._animate = this._animate.bind(this);
 
@@ -67,7 +67,7 @@ class GLWrapper extends Component{
 		//Constants and utilities
 		this.R0 = 10; //radius of earth
 		this.R1 = 22; //max radius of bezier curve control points
-		this.MAX_PARTICLE_PER_PATH = 32;
+		this.MAX_PARTICLE_PER_PATH = 16;
 		this.MAX_PATH = 255;
 		this.splineGenerator = generateSpline(this.R0, this.R1);
 
@@ -108,9 +108,9 @@ class GLWrapper extends Component{
 
 		//Make one-time request for geodata
 		Promise.all([
-			countryISO,
-			countryJSON
-		])
+				countryISO,
+				countryJSON
+			])
 			.then(zipJSON)
 			.then(([geojson, centroids]) => {
 				this.setState({
@@ -152,46 +152,31 @@ class GLWrapper extends Component{
 
 		};
 
-		//Regenerate line mesh
-		//Requires: props.data (migration data), state.geojson, state.centroids
-		//TODO: regeneration should only occur when data has changed
-		if(data && geojson && centroids){
-			//Generate splines
-			const splines = data
-				.map(d => [centroids.get(d.originCode), centroids.get(d.destCode)]) //Zip data (migration OD) with centroids
-				.map(d => this.splineGenerator(...d)); 
+		//When props.data becomes available, update webgl attributes
+		if(data && centroids){
+			//Generate unique array of destinations
+			const destCodes = uniq(
+				data.map(od => od.originCode === country?od.destCode:od.originCode)
+			);
+			const originCentroid = centroids.get(country);
 
+			//Generate a map of splines for each destination from origin country
+			const splines = new Map(
+				destCodes.map(destCode => [destCode, this.splineGenerator(originCentroid, centroids.get(destCode))])
+			);
+			
 			//Generate position attribute data for this.pathMesh from splines
-			const pathPositions = splines
+			const pathPositions = Array.from(splines.values())
+				.filter(d => !!d)
 				.map(spline => spline.getPoints(32-1))
-				.reduce((acc,val) => acc.concat(val), []); //flatten
-
-			//Generate attributes for this.particles
-			const vRange = extent(data, d => d.v);
-			const particlesPerPath = scaleLinear()
-				.domain(vRange)
-				.range([3, this.MAX_PARTICLE_PER_PATH])
-				.clamp(true);
-			const particleData = data.map((od,i) => {
-					const spline = splines[i];
-					const {p0,p1,c0,c1} = spline; //THREE.Vector3
-					const {v:value} = od; //migration figure
-					const n = Math.round(particlesPerPath(value));
-					
-					return Array.from({length:n}).map((d,j) => {
-						const t = 1/n * j;
-						return {
-							p0,p1,c0,c1,
-							t,
-							position: spline.getPoint(t)
-						}
-					});
-				})
 				.reduce((acc,val) => acc.concat(val), []);
 
-			this._updateAttributes(pathPositions, particleData);
+			//Generate attributes for this.particles
+			const particleData = this._generateParticleData(data, splines);
 
+			this._updateAttributes(pathPositions, particleData);
 		}
+
 
 		//Update camera location based on props.country
 		if(centroids && country){
@@ -207,7 +192,7 @@ class GLWrapper extends Component{
 		}
 
 		//Redraw canvas-based textures
-		if(geojson){
+		if(geojson && (!prevState.geojson)){
 			//Render world map to this.canvasWorld
 			//Also updates this.canvasWorldTexture
 			//TODO: do this offscreen
@@ -270,14 +255,15 @@ class GLWrapper extends Component{
 		);
 
 		//Set up this.particles
+		const NUM_PARTICLES = this.MAX_PARTICLE_PER_PATH * this.MAX_PATH;
 		const particlesGeometry = new THREE.BufferGeometry();
-		particlesGeometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(255*32*3),3));
-		particlesGeometry.addAttribute('p0', new THREE.BufferAttribute(new Float32Array(255*32*3), 3));
-		particlesGeometry.addAttribute('p1', new THREE.BufferAttribute(new Float32Array(255*32*3), 3));
-		particlesGeometry.addAttribute('c0', new THREE.BufferAttribute(new Float32Array(255*32*3), 3));
-		particlesGeometry.addAttribute('c1', new THREE.BufferAttribute(new Float32Array(255*32*3), 3));
-		particlesGeometry.addAttribute('t', new THREE.BufferAttribute(new Float32Array(255*32*1), 1));
-		particlesGeometry.addAttribute('s', new THREE.BufferAttribute(new Float32Array(255*32*1), 1));
+		particlesGeometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3),3));
+		particlesGeometry.addAttribute('p0', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 3));
+		particlesGeometry.addAttribute('p1', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 3));
+		particlesGeometry.addAttribute('c0', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 3));
+		particlesGeometry.addAttribute('c1', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 3));
+		particlesGeometry.addAttribute('t', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*1), 1));
+		particlesGeometry.addAttribute('s', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*1), 1));
 		const particlesMaterial = new THREE.RawShaderMaterial({
 			vertexShader: particleVS,
 			fragmentShader: particleFS,
@@ -424,6 +410,56 @@ class GLWrapper extends Component{
 		TWEEN.update();
 
 		requestAnimationFrame(this._animate);
+
+	}
+
+	_generateParticleData(data, splines){
+
+		const {country} = this.props;
+
+		const particlesPerPath = scaleLinear()
+			.domain(extent(data, d => d.v))
+			.range([3, this.MAX_PARTICLE_PER_PATH])
+			.clamp(true);
+
+		return data.map(od => {
+
+				const nParticles = particlesPerPath(od.v);
+				
+				//For each od pair...
+				if(od.originCode === country){
+					//particles leaving from origin country
+					const spline = splines.get(od.destCode);
+					if(!spline) return;
+
+					return Array.from({length:nParticles}).map((d,i) => ({
+						p0:spline.p0,
+						p1:spline.p1,
+						c0:spline.c0,
+						c1:spline.c1,
+						t: 1/nParticles * i,
+						position: spline.getPoint(1/nParticles * i)
+					}));
+
+				}else{
+					//particles entering origin country
+					const spline = splines.get(od.originCode);
+					if(!spline) return;
+					
+					//Note how we flip p0, p1, c0, and c1
+					return Array.from({length:nParticles}).map((d,i) => ({
+						p0:spline.p1,
+						p1:spline.p0,
+						c0:spline.c1,
+						c1:spline.c0,
+						t: 1/nParticles * i,
+						position: spline.getPoint(1/nParticles * i)
+					}));
+				}
+
+			})
+			.filter(od => !!od)
+			.reduce((acc,val) => acc.concat(val), []);
 
 	}
 
