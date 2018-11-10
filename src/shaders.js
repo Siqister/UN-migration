@@ -25,6 +25,8 @@ export const globeFS = `
 `;
 
 export const particleVS = `
+  #define PI 3.1415926535
+
 	uniform mat4 projectionMatrix;
 	uniform mat4 modelViewMatrix;
 
@@ -54,7 +56,7 @@ export const particleVS = `
 		if(pct > 1.0){
 			pct = pct - 1.0;
 		}
-		v_t = pct;
+		v_t = sin(pct * PI);
 
 		vec3 interpolatedPosition = cubicBezier(p0,c0,c1,p1,pct);
 
@@ -72,7 +74,7 @@ export const particleFS = `
 	void main(){
 		//vec4 color = texture2D(texture, gl_PointCoord);
 		//gl_FragColor = texture2D(texture, gl_PointCoord);
-		gl_FragColor = vec4(0.8, 0.8, 0.8, 0.5);
+		gl_FragColor = vec4(v_t, v_t, v_t, 0.7);
 	}
 `;
 

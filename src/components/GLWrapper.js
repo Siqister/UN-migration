@@ -79,6 +79,7 @@ class GLWrapper extends Component{
 		this.tween.camera = new TWEEN.Tween(this.camera.position)
 			.easing(TWEEN.Easing.Cubic.InOut)
 			.onUpdate(() => {
+				this.cameraPosition = this.camera.position.toArray();
 				this.camera.lookAt(new THREE.Vector3(...this.state.cameraLookat));
 			});
 
