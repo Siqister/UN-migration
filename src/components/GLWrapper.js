@@ -124,9 +124,9 @@ class GLWrapper extends Component{
 
 	componentDidUpdate(prevProps, prevState){
 
-		//Not called for initial render
-		//Props (width, height, data, country) may be incomplete
-		//DOM is just updated
+		//Not called for initial render, but subsequent DOM updates
+
+		//This is where to update GL state
 		const {width, height, data, country} = this.props;
 		const {cameraLookat, geojson, centroids} = this.state;
 
@@ -138,7 +138,7 @@ class GLWrapper extends Component{
 		console.log(centroids);
 		console.groupEnd();
 
-		//When props.width and props.height passed in, set renderer size
+		//When props.width and props.height are changed, change render target size and update camera aspect
 		if(width && height){
 			this.renderer.setSize(width, height);
 			this.renderTargetGlobe.setSize(width, height);
@@ -148,11 +148,11 @@ class GLWrapper extends Component{
 			});
 
 			this.camera.aspect = width/height;
-			this.camera.position.fromArray(this.cameraPosition); 
 			this.camera.updateProjectionMatrix();
 
 		};
 
+		//When props.data changes
 		//When props.data becomes available, update webgl attributes
 		if(data && centroids){
 			//Generate unique array of destinations
@@ -178,9 +178,9 @@ class GLWrapper extends Component{
 			this._updateAttributes(pathPositions, particleData);
 		}
 
-
+		//When props.country changes...
 		//Update camera location based on props.country
-		if(centroids && country){
+		if(centroids && country && (country !== prevProps.country)){
 			const o = [45,-15];
 			const c = centroids.get(country);
 			//new camera location
@@ -192,6 +192,7 @@ class GLWrapper extends Component{
 				.start();
 		}
 
+		//When geojson is first loaded...
 		//Redraw canvas-based textures
 		if(geojson && (!prevState.geojson)){
 			//Render world map to this.canvasWorld
@@ -358,6 +359,10 @@ class GLWrapper extends Component{
 			const particleTAttribute = this.particles.geometry.getAttribute('t');
 			particleTAttribute.copyArray(particleT);
 			particleTAttribute.needsUpdate = true;
+
+			//After updating attributes, update draw range
+			this.pathMesh.geometry.setDrawRange(0, pathPositions.length);
+			this.particles.geometry.setDrawRange(0, particleData.length);
 
 	}
 

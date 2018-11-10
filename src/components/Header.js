@@ -1,7 +1,7 @@
 import React, {Component} from 'react';
 
 const selectStyle = {
-	background: 'none',
+	background: '#111',
 	border: '1px solid #333',
 	color: '#ccc'
 }
@@ -22,7 +22,7 @@ const CountrySelect = props => (
     	style={selectStyle}
     	onChange={event => props.onCountryChange(event.target.value)}
     >
-      {props.countries.map(c =>
+      {props.countries.sort((a,b) => (b[0] - a[0])).map(c =>
       	<option value={c[1]} key={c[1]}>{c[0]}</option>
 			)}
     </select>
@@ -51,7 +51,7 @@ const headerWidgetStyle = {
 	width:'256px',
 	padding:'0 8px',
 	boxSize:'border-box',
-	float:'left'
+	float:'right'
 }
 
 const headerWidget = Component => {
@@ -78,6 +78,17 @@ const headerStyle = {
 const Header = ({years, year, onYearChange, countries, country, onCountryChange}) => (<header
 		style={headerStyle}
 	>
+		<h1
+			style={{
+				fontFamily: 'Playfair Display',
+				fontWeight: '400',
+				fontSize: '1.5rem',
+				color:'#eee',
+				display:'inline'
+			}}
+		>
+			UN Migration
+		</h1>
 		{countries && <CountrySelectWidget
 			countries={countries}
 			country={country}
