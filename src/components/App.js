@@ -9,6 +9,7 @@ import {
 //Components
 import GLWrapper from './GLWrapper';
 import Header from './Header';
+import ChartContainer from './ChartContainer';
 
 
 class App extends Component{
@@ -56,14 +57,14 @@ class App extends Component{
 		const {data,countryCode,country,year,width,height} = this.state;
 
 		//Compute derived data
+		let chartData = null;
 		let glData = null;
 		let years = null;
 		let countries = null;
 
 		if(data){
-			glData = data.filter(d => 
-				d.year === year && (d.originCode === country || d.destCode === country)
-			);
+			chartData = data.filter(d => d.originCode === country || d.destCode === country );
+			glData = chartData.filter(d => d.year === year );
 			years = uniq(data.map(d => d.year));
 		}
 
@@ -86,6 +87,13 @@ class App extends Component{
 					height={height}
 					data={glData}
 					country={country}
+				/>
+				<ChartContainer
+					width={width}
+					data={chartData}
+					countryCode={countryCode}
+					country={country}
+					year={year}
 				/>
 			</div>
 		)

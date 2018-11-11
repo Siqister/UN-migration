@@ -5,7 +5,15 @@ import uniq from 'lodash/uniq';
 const OrbitControls = require('three-orbitcontrols');
 const TWEEN = require('tween.js');
 
-import {countryISO, countryJSON, generateSpline, project, zipJSON, renderMap} from '../utils';
+import {
+	countryISO, 
+	countryJSON, 
+	generateSpline, 
+	project, 
+	zipJSON, 
+	renderMap,
+	colorToNum
+} from '../utils';
 import {
 	globeVS, globeFS,
 	particleVS, particleFS, 
@@ -21,6 +29,7 @@ class GLWrapper extends Component{
 		this._generateParticleData = this._generateParticleData.bind(this);
 		this._updateAttributes = this._updateAttributes.bind(this);
 		this._animate = this._animate.bind(this);
+		this._onMousemove = this._onMousemove.bind(this);
 
 		this.state = {
 			//data states
@@ -39,6 +48,7 @@ class GLWrapper extends Component{
 		this.orbitControls = null;
 		//4x WebGL render targets and 1x WebGL renderer
 		this.renderTargetGlobe = new THREE.WebGLRenderTarget(0,0);
+		this.renderTargetPicking = new THREE.WebGLRenderTarget(0,0);
 		this.renderTargetParticle = new THREE.WebGLRenderTarget(0,0);
 		this.tempFBO = [
 			new THREE.WebGLRenderTarget(0,0),
@@ -57,12 +67,19 @@ class GLWrapper extends Component{
 		this.particlesPassQuad = null; 
 		this.finalPassQuad = null;
 
-		//Canvas for rendering globe textures
+		//Canvas and texture for rendering globe texture
 		this.canvasWorld = document.createElement('canvas');
 		this.canvasWorld.width = 4096;
 		this.canvasWorld.height = 2048;
 		this.canvasWorldCtx = this.canvasWorld.getContext('2d');
 		this.canvasWorldTexture = new THREE.CanvasTexture(this.canvasWorld);
+
+		//Canvas and texture for rendering picking texture
+		this.canvasPicking = document.createElement('canvas');
+		this.canvasPicking.width = 4096;
+		this.canvasPicking.height = 2048;
+		this.canvasPickingCtx = this.canvasPicking.getContext('2d');
+		this.canvasPickingTexture = new THREE.CanvasTexture(this.canvasPicking);
 
 		//Constants and utilities
 		this.R0 = 10; //radius of earth
@@ -142,6 +159,7 @@ class GLWrapper extends Component{
 		if(width && height){
 			this.renderer.setSize(width, height);
 			this.renderTargetGlobe.setSize(width, height);
+			this.renderTargetPicking.setSize(width, height);
 			this.renderTargetParticle.setSize(width, height);
 			this.tempFBO.forEach(target => {
 				target.setSize(width, height);
@@ -195,11 +213,12 @@ class GLWrapper extends Component{
 		//When geojson is first loaded...
 		//Redraw canvas-based textures
 		if(geojson && (!prevState.geojson)){
-			//Render world map to this.canvasWorld
-			//Also updates this.canvasWorldTexture
 			//TODO: do this offscreen
 			renderMap(this.canvasWorldCtx, geojson);
 			this.canvasWorldTexture.needsUpdate = true;
+
+			renderMap(this.canvasPickingCtx, geojson, true);
+			this.canvasPickingTexture.needsUpdate = true;
 		}
 
 	}
@@ -214,6 +233,7 @@ class GLWrapper extends Component{
 					width={width}
 					height={height}
 					ref={node => {this.canvasNode = node}}
+					onMouseMove={this._onMousemove}
 				/>
 			</div>
 		);
@@ -239,7 +259,9 @@ class GLWrapper extends Component{
 				fragmentShader:globeFS,
 				uniforms:{
 					uUseTexture:{value:0.0},
-					tSampler:{value:this.canvasWorldTexture}
+					uUsePickingTexture:{value:0.0},
+					tSampler:{value:this.canvasWorldTexture},
+					tPickingTexture:{value:this.canvasPickingTexture}
 				}
 			})
 		);
@@ -371,6 +393,7 @@ class GLWrapper extends Component{
 		//Perform individual render passes
 		//First pass renders globe and lines
 		this.globeMesh.material.uniforms.uUseTexture.value = 1.0;
+		this.globeMesh.material.uniforms.uUsePickingTexture.value = 0.0;
 		this.renderer.render(
 			this.sceneGlobe,
 			this.camera,
@@ -417,6 +440,35 @@ class GLWrapper extends Component{
 
 		requestAnimationFrame(this._animate);
 
+	}
+
+	_onMousemove(e){
+
+		const pixelBuffer = new Uint8Array(4);
+		const x = e.clientX;
+		const y = e.clientY;
+
+		//Render picking scene
+		this.globeMesh.material.uniforms.uUseTexture.value = 1.0;
+		this.globeMesh.material.uniforms.uUsePickingTexture.value = 1.0;
+		this.renderer.render(
+			this.sceneGlobe,
+			this.camera,
+			this.renderTargetPicking,
+			true
+		);
+
+		//Read color buffer value
+		this.renderer.readRenderTargetPixels(
+			this.renderTargetPicking,
+			x, this.renderTargetPicking.height-y,
+			1,1,
+			pixelBuffer);
+
+		//Reverse engineer country code from color buffer value
+		const countryCode = colorToNum(pixelBuffer[0]/255, pixelBuffer[1]/255, pixelBuffer[2]/255);
+		console.log(countryCode);
+		
 	}
 
 	_generateParticleData(data, splines){

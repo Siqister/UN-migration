@@ -11,14 +11,23 @@ export const globeFS = `
 	precision mediump float;
 
 	varying vec2 v_uv;
+
 	uniform float uUseTexture;
+	uniform float uUsePickingTexture;
 	uniform sampler2D tSampler;
+	uniform sampler2D tPickingTexture;
 
 	void main(){
+		//Render black globe only
 		vec3 color = vec3(0.0,0.0,0.0);
+
+		//Render textured globe
 		if(uUseTexture > 0.0){
-			//color = vec3(1.0,0.0,0.0);
-			color = texture2D(tSampler, v_uv).rgb;
+			if(uUsePickingTexture > 0.0){
+				color = texture2D(tPickingTexture, v_uv).rgb;
+			}else{
+				color = texture2D(tSampler, v_uv).rgb;
+			}
 		}
 		gl_FragColor = vec4(color,1.0);
 	}
