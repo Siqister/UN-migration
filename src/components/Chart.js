@@ -96,7 +96,7 @@ class Chart extends Component{
 
 	render(){
 
-		const {width,partner,country,max,data} = this.props;
+		const {width,partner,partnerName,country,max,data} = this.props;
 
 		return (
 			<div 
@@ -130,7 +130,7 @@ class Chart extends Component{
 						dy={4}
 						fill='#eee'
 					>
-						{partner}
+						{partnerName}
 					</text>
 				</svg>
 			</div>

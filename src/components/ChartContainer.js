@@ -41,10 +41,10 @@ class ChartContainer extends Component{
 
 	render(){
 
-		const {width,data,countryCode,country,year} = this.props;
+		const {width,data,countryName,country,year} = this.props;
 		const {page, chartWidth} = this.state;
 
-		if(!data || !countryCode || !width){
+		if(!data || !countryName || !width){
 			return null;
 		}
 
@@ -55,9 +55,9 @@ class ChartContainer extends Component{
 		const chartsData = dataByPartnerCountry.slice(page * chartsPerPage, (page+1) * chartsPerPage);
 
 		console.group('ChartContainer:render');
-		console.log(countryCode);
+		console.log(countryName);
 		console.log(country);
-		console.log(countryCode.get(country)); //TODO: not working yet
+		console.log(countryName.get(country)); //TODO: not working yet
 
 		console.log(`Render page ${page} of ${maxPages}, showing ${chartsPerPage} charts`);
 		console.log(chartsData);
@@ -73,7 +73,7 @@ class ChartContainer extends Component{
 					style={{padding:'0 16px'}}
 				>
 					<h2 style={Object.assign({}, fontStyle, {fontSize:'1rem'})} >
-						Migration to and from {countryCode.get(country)}:
+						Migration between {countryName.get(country)} and:
 					</h2>
 				</div>
 				<div 
@@ -84,6 +84,7 @@ class ChartContainer extends Component{
 						<Chart 
 							width={chartWidth}
 							key={d.key}
+							partnerName={countryName.get(+d.key)}
 							partner={d.key}
 							country={country}
 							max={chartsData[0].max}

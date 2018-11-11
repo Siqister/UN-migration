@@ -71,13 +71,18 @@ const migrationOriginDest = fetchData(
 );
 export {migrationOriginDest}
 
-const countryCode = fetchData(
+const _countryData = fetchData(
 	COUNTRY_CODE_URL, 
 	parseCountryCode, 
 	data => data.filter(d => d[1] < 900), 
-	data => new Map(data)
 );
+const countryCode = _countryData
+	.then(data => new Map(data));
+const countryName = _countryData
+	.then(data => data.map(d => [d[1],d[0]]))
+	.then(data => new Map(data));
 export {countryCode}
+export {countryName}
 
 const ODData = Promise.all([migrationOriginDest, countryCode])
 	.then(zipDataToCode);

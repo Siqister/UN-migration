@@ -3,7 +3,7 @@ import uniq from 'lodash/uniq';
 
 //Data utilities
 import { 
-	ODData, countryCode
+	ODData,countryCode,countryName
 } from '../utils';
 
 //Components
@@ -23,6 +23,7 @@ class App extends Component{
 			height: 0,
 			data: null,
 			countryCode: null,
+			countryName: null,
 			country: 840, //Default to US
 			year: 2017, //Default to 2017
 		}
@@ -45,16 +46,16 @@ class App extends Component{
 		});
 
 		//Request data
-		Promise.all([ODData, countryCode])
-			.then(([data, countryCode]) => {
-				this.setState({data, countryCode})
+		Promise.all([ODData, countryCode, countryName])
+			.then(([data, countryCode, countryName]) => {
+				this.setState({data, countryCode, countryName})
 			});
 
 	}
 
 	render(){
 
-		const {data,countryCode,country,year,width,height} = this.state;
+		const {data,countryCode,countryName,country,year,width,height} = this.state;
 
 		//Compute derived data
 		let chartData = null;
@@ -91,7 +92,7 @@ class App extends Component{
 				<ChartContainer
 					width={width}
 					data={chartData}
-					countryCode={countryCode}
+					countryName={this.state.countryName}
 					country={country}
 					year={year}
 				/>
