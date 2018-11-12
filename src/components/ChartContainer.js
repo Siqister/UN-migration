@@ -12,17 +12,29 @@ const fontStyle = {
 
 const chartContainerStyle = {
 	position:'absolute',
-	height:'144px',
+	height:'160px',
 	width:'100%',
 	bottom:'0',
 }
 
 const chartContainerBodyStyle = {
 	position:'absolute',
-	height:'120px',
+	height:'136px',
 	width:'100%',
 	bottom:'0',
-	background:'#111'
+	//background:'#111'
+}
+
+const paginationIconStyle={
+	width:'6px',
+	height:'6px',
+	position:'relative',
+	top:'12px',
+	transform:'translate(0,-50%)',
+	borderRadius:'10px',
+	margin:'0 2px',
+	border:'1px solid #ccc',
+	cursor:'pointer'
 }
 
 class ChartContainer extends Component{
@@ -72,23 +84,35 @@ class ChartContainer extends Component{
 					className='chart-container-top'
 					style={{padding:'0 16px'}}
 				>
-					<h2 style={Object.assign({}, fontStyle, {fontSize:'1rem'})} >
-						Migration between {countryName.get(country)} and:
+					<h2 style={Object.assign({}, fontStyle, {display:'inline'})} >
+						Migration between {countryName.get(country)} and: 
 					</h2>
+					<div className='pagination' style={Object.assign({}, {float:'right'})}>
+						{Array.from({length:maxPages}).map((d,i) =>
+							<div 
+								className='pagination-icon' 
+								key={i} 
+								style={Object.assign({}, paginationIconStyle, {background:i===page?'white':null})}
+								onClick={e => this.setState({page:i})}
+							>
+							</div>
+						)}
+					</div>
 				</div>
 				<div 
 					className='chart-container-body'
 					style={chartContainerBodyStyle}
 				>
-					{chartsData.map(d => 
+					{chartsData.map((d,i) => 
 						<Chart 
 							width={chartWidth}
-							key={d.key}
+							key={i}
 							partnerName={countryName.get(+d.key)}
 							partner={d.key}
 							country={country}
 							max={chartsData[0].max}
 							data={d.values}
+							year={year}
 						/>
 					)}
 				</div>
