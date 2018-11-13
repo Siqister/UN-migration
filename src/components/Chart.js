@@ -20,7 +20,18 @@ const pathStyle = {
 	strokeWidth:'1.5px'
 }
 
-//Share line axis generators, and scales
+const readoutCircleStyle = {
+	fill:'none', 
+	stroke:'#111', 
+	strokeWidth:'2px'
+}
+
+const colors = {
+	out:'yellow',
+	in:'#00E0FF'
+}
+
+//Shared line + axis generators, and scales
 const scaleX = scaleLinear();
 const scaleY = scaleLinear();
 
@@ -33,6 +44,7 @@ const axisY = axisLeft()
 	.ticks(3)
 	.tickFormat(d => d/1000+'k');
 
+
 class Chart extends Component{
 
 	constructor(props){
@@ -40,7 +52,7 @@ class Chart extends Component{
 
 		this.innerW = 0;
 		this.innerH = 0;
-		this.margin = {t:24,r:24,b:24,l:16}
+		this.margin = {t:40,r:24,b:24,l:16}
 
 		this.containerRef = null;
 		this.axisRef = null;
@@ -63,6 +75,7 @@ class Chart extends Component{
 		this.innerW = this.containerRef.clientWidth - this.margin.l - this.margin.r;
 		this.innerH = this.containerRef.clientHeight - this.margin.t - this.margin.b;
 
+		//Update SVG attributes
 		this._updateSVGAttr();
 
 	}
@@ -81,40 +94,33 @@ class Chart extends Component{
 				style={Object.assign({}, chartStyle, {width:`${width}px`})}
 				ref={ref => this.containerRef = ref}
 			>
-				<svg
-					width={width}
-				>
-					<g className='plot' transform={`translate(${this.margin.l},${this.margin.t})`}>
-						<g className='axis-y' 
-							ref={ref => this.axisRef = ref}
-						/>
-						{data.map(series => 
-							<g key={series.key}>
-								<path 
-									className={`series ${+series.key === country?'out':'in'}`}
-									style={pathStyle}
-									ref={ref => {
-										const inOut = `${+series.key === country?'out':'in'}`;
-										this.pathRef[inOut] = ref;
-									}}
-								/>
-								<g
-									className={`readout ${+series.key === country?'out':'in'}`}
-									ref={ref => {
-										const inOut = `${+series.key === country?'out':'in'}`;
-										this.readoutRef[inOut] = ref;
-									}}
-								>
-									<circle r={4} style={{fill:'yellow', stroke:'#111', strokeWidth:'2px'}} />
-									<text></text>
-								</g>
-							</g>
+				<svg width={width}>
+					<g className='plot' transform={`translate(${this.margin.l},${this.margin.t})`} >
+						<g className='axis-y' ref={ref => this.axisRef = ref} />
+						{data.map(series => {
+								const direction = +series.key === country ? 'out':'in';
+								const color = colors[direction];
+								return (<g key={series.key}>
+									<path 
+										className={`series ${direction}`}
+										style={Object.assign({}, pathStyle, {stroke:color})}
+										ref={ref => {this.pathRef[direction] = ref;}}
+									/>
+									<g
+										className={`readout ${direction}`}
+										ref={ref => {this.readoutRef[direction] = ref;}}
+									>
+										<circle r={4} style={Object.assign({}, readoutCircleStyle, {fill:color})} />
+										<text></text>
+									</g>
+								</g>);
+							}
 						)}
 					</g>
 					<text 
 						style={fontStyle}
 						x={this.margin.l}
-						y={this.margin.t}
+						y={this.margin.t - 16}
 						dy={4}
 						fill='#eee'
 					>
@@ -171,7 +177,6 @@ class Chart extends Component{
 			//get readout value
 			const readoutValue = series.values.filter(d => d.year === year)[0];
 			if(!readoutValue) return;
-			console.log(readoutValue);
 
 			select(readout)
 				//.transition()

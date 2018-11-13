@@ -12,14 +12,14 @@ const fontStyle = {
 
 const chartContainerStyle = {
 	position:'absolute',
-	height:'160px',
+	height:'174px',
 	width:'100%',
 	bottom:'0',
 }
 
 const chartContainerBodyStyle = {
 	position:'absolute',
-	height:'136px',
+	height:'150px',
 	width:'100%',
 	bottom:'0',
 	//background:'#111'
