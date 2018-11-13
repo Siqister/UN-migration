@@ -110,7 +110,7 @@ class ChartContainer extends Component{
 							partnerName={countryName.get(+d.key)}
 							partner={d.key}
 							country={country}
-							max={chartsData[0].max}
+							max={max(chartsData, d => d.max)}
 							data={d.values}
 							year={year}
 						/>
@@ -124,6 +124,7 @@ class ChartContainer extends Component{
 }
 
 //Utility function for generating derived data from OD pairs
+//"Re-centers" OD pairs around a single country
 const groupByCountry = (ODData, country) => {
 
 	const ODDataTransformed = ODData.map(od => {

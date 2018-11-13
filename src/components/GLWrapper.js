@@ -147,7 +147,7 @@ class GLWrapper extends Component{
 		const {width, height, data, country} = this.props;
 		const {cameraLookat, geojson, centroids} = this.state;
 
-		console.group('GLWrapper : componentDidUpdate');
+		console.groupCollapsed('GLWrapper : componentDidUpdate');
 		console.log(width);
 		console.log(height);
 		console.log(data);
