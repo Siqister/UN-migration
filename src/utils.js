@@ -199,6 +199,9 @@ export const generateSpline = (r0, r1) => {
 export const numToHex = num => 
 	num.toString(16)
 
+export const numToHexColor = num => 
+	new THREE.Color().setHex(num)
+
 export const colorToNum = (r,g,b) => ( r << 16 ) | ( g << 8 ) | ( b );
 
 //2D geo utilities
@@ -227,7 +230,9 @@ export const renderMap = (ctx, json, colorById=false, width=4096, height=2048) =
 			if(!d.properties.ISO_CODE) return;
 			ctx.beginPath();
 			path(d);
-			ctx.fillStyle = '#' + numToHex(d.properties.ISO_CODE);
+
+			const color = numToHexColor(d.properties.ISO_CODE);
+			ctx.fillStyle = '#' + color.getHexString();
 			ctx.fill();
 		});
 	}else{

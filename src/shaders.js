@@ -45,10 +45,14 @@ export const particleVS = `
 	attribute vec3 c0;
 	attribute vec3 c1;
 	attribute float t;
+	attribute float size;
+	attribute vec3 color;
 
 	uniform float tOffset;
 
 	varying float v_t;
+	varying vec3 v_color;
+	varying float v_size;
 
 	vec3 cubicBezier(vec3 p0, vec3 c0, vec3 c1, vec3 p1, float t){
 		float tn = 1.0 - t;
@@ -65,12 +69,15 @@ export const particleVS = `
 		if(pct > 1.0){
 			pct = pct - 1.0;
 		}
+
 		v_t = sin(pct * PI);
+		v_color = color;
+		v_size = size;
 
 		vec3 interpolatedPosition = cubicBezier(p0,c0,c1,p1,pct);
 
 		gl_Position = projectionMatrix * modelViewMatrix * vec4(interpolatedPosition, 1.0);
-		gl_PointSize = 2.0;
+		gl_PointSize = size;
 	}
 `;
 
@@ -79,11 +86,16 @@ export const particleFS = `
 
 	//uniform sampler2D texture;
 	varying float v_t;
+	varying vec3 v_color;
+	varying float v_size;
 
 	void main(){
-		//vec4 color = texture2D(texture, gl_PointCoord);
-		//gl_FragColor = texture2D(texture, gl_PointCoord);
-		gl_FragColor = vec4(v_t, v_t, v_t, 0.7);
+		vec3 color = vec3(1.0, 1.0, 1.0);
+		if(v_size > 2.0){
+			//particle is on a selected path
+			color = vec3(1.0, 0.1, 0.0);
+		}
+		gl_FragColor = vec4(color * v_t, 0.1);
 	}
 `;
 
@@ -121,6 +133,6 @@ export const particlesPassFS = `
 	void main(){
 		vec3 current = texture2D(tCurrent, v_uv).rgb;
 		vec3 prev = texture2D(tPrev, v_uv).rgb;
-		gl_FragColor = vec4(current + prev * 0.6, 1.0);
+		gl_FragColor = vec4(current + prev * 0.7, 1.0);
 	}
 `;

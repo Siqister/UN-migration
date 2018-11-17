@@ -27,7 +27,8 @@ class GLWrapper extends Component{
 
 		this._initScene = this._initScene.bind(this); 
 		this._generateParticleData = this._generateParticleData.bind(this);
-		this._updateAttributes = this._updateAttributes.bind(this);
+		this._updatePaths = this._updatePaths.bind(this);
+		this._updateParticles = this._updateParticles.bind(this);
 		this._animate = this._animate.bind(this);
 		this._onMousemove = this._onMousemove.bind(this);
 
@@ -39,6 +40,9 @@ class GLWrapper extends Component{
 			//animation states
 			cameraLookat: [0,0,0]
 		};
+
+		//Store a reference to particleData
+		this.particleData = null;
 
 		//GL animation state, used instead of react state to avoid unnecessary updating
 		this.cameraPosition = [0,0,40];
@@ -57,6 +61,7 @@ class GLWrapper extends Component{
 		this.currentCompositeTargetIdx = 0;
 		//4x scenes (1 for path+globe, 1 for current particles, 1 for particle pass, 1 for final compositing)
 		this.sceneGlobe = new THREE.Scene();
+		this.sceneGlobePicking = new THREE.Scene();
 		this.sceneParticles = new THREE.Scene();
 		this.sceneParticlesPass = new THREE.Scene();
 		this.sceneFinalPass = new THREE.Scene();
@@ -193,9 +198,10 @@ class GLWrapper extends Component{
 				.reduce((acc,val) => acc.concat(val), []);
 
 			//Generate attributes for this.particles
-			const particleData = this._generateParticleData(data, splines);
+			this.particleData = this._generateParticleData(data, splines);
 
-			this._updateAttributes(pathPositions, particleData);
+			this._updatePaths(pathPositions);
+			this._updateParticles(this.particleData);
 		}
 
 		//When props.country changes...
@@ -253,7 +259,7 @@ class GLWrapper extends Component{
 		this.camera.position.fromArray(this.cameraPosition);
 		this.camera.lookAt(new THREE.Vector3(...cameraLookat));
 
-		//Set up this.globeMesh
+		//Set up this.globeMesh and this.globeMeshPicking
 		this.globeMesh = new THREE.Mesh(
 			new THREE.SphereBufferGeometry(this.R0, 32, 32),
 			new THREE.ShaderMaterial({
@@ -267,6 +273,10 @@ class GLWrapper extends Component{
 				}
 			})
 		);
+
+		this.globeMeshPicking = this.globeMesh.clone();
+		this.globeMeshPicking.material.uniforms.uUseTexture.value = 1.0;
+		this.globeMeshPicking.material.uniforms.uUsePickingTexture.value = 1.0;
 
 		//Set up this.pathMesh
 		const pathGeometry = new THREE.BufferGeometry();
@@ -289,7 +299,8 @@ class GLWrapper extends Component{
 		particlesGeometry.addAttribute('c0', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 3));
 		particlesGeometry.addAttribute('c1', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 3));
 		particlesGeometry.addAttribute('t', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*1), 1));
-		particlesGeometry.addAttribute('s', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*1), 1));
+		particlesGeometry.addAttribute('size', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*1), 1));
+		particlesGeometry.addAttribute('color', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 1));
 		const particlesMaterial = new THREE.RawShaderMaterial({
 			vertexShader: particleVS,
 			fragmentShader: particleFS,
@@ -339,6 +350,7 @@ class GLWrapper extends Component{
 		//globe and path
 		this.sceneGlobe.add(this.globeMesh);
 		this.sceneGlobe.add(this.pathMesh);
+		this.sceneGlobePicking.add(this.globeMeshPicking);
 		//particles
 		this.sceneParticles.add(this.globeMesh.clone());
 		this.sceneParticles.add(this.particles);
@@ -347,18 +359,26 @@ class GLWrapper extends Component{
 		this.sceneFinalPass.add(this.finalPassQuad);
 	}
 
-	_updateAttributes(pathPositions, particleData){
-			//Update this.pathMesh 
-			const pathPositionAttribute = this.pathMesh.geometry.getAttribute('position');
-			pathPositionAttribute.copyVector3sArray(pathPositions);
-			pathPositionAttribute.needsUpdate = true;
+	_updatePaths(pathPositions){
+		//Update this.pathMesh 
+		const pathPositionAttribute = this.pathMesh.geometry.getAttribute('position');
+		pathPositionAttribute.copyVector3sArray(pathPositions);
+		pathPositionAttribute.needsUpdate = true;
 
-			//Update this.particles
+		//After updating attributes, update draw range
+		this.pathMesh.geometry.setDrawRange(0, pathPositions.length);
+	}
+
+	_updateParticles(particleData, updatePosition=true, updateSpline=true, updateT=true, updateSize=true, updateColor=true){
+		//Update this.particles
+		if(updatePosition){
 			const particlePositions = particleData.map(d => d.position);
 			const particlePositionAttribute = this.particles.geometry.getAttribute('position');
 			particlePositionAttribute.copyVector3sArray(particlePositions);
 			particlePositionAttribute.needsUpdate = true;
+		}
 
+		if(updateSpline){
 			const particleP0 = particleData.map(d => d.p0);
 			const particleP0Attribute = this.particles.geometry.getAttribute('p0');
 			particleP0Attribute.copyVector3sArray(particleP0);
@@ -378,16 +398,32 @@ class GLWrapper extends Component{
 			const particleC1Attribute = this.particles.geometry.getAttribute('c1');
 			particleC1Attribute.copyVector3sArray(particleC1);
 			particleC1Attribute.needsUpdate = true;
+		}
 
+		if(updateT){
 			const particleT = particleData.map(d => d.t);
 			const particleTAttribute = this.particles.geometry.getAttribute('t');
 			particleTAttribute.copyArray(particleT);
 			particleTAttribute.needsUpdate = true;
+		}
 
-			//After updating attributes, update draw range
-			this.pathMesh.geometry.setDrawRange(0, pathPositions.length);
-			this.particles.geometry.setDrawRange(0, particleData.length);
+		if(updateSize){
+			const particleSize = particleData.map(d => d.size);
+			const particleSizeAttribute = this.particles.geometry.getAttribute('size');
+			particleSizeAttribute.copyArray(particleSize);
+			particleSizeAttribute.needsUpdate = true;
+		}
 
+		if(updateColor){
+			const particleColor = particleData.map(d => [d.color.r, d.color.g, d.color.b]).reduce((acc,val) => acc.concat(val), [])
+			console.log(particleColor);
+			const particleColorAttribute = this.particles.geometry.getAttribute('color');
+			particleColorAttribute.copyArray(particleColor);
+			particleColorAttribute.needsUpdate = true;
+		}
+		
+		//After updating attributes, update draw range
+		this.particles.geometry.setDrawRange(0, particleData.length);
 	}
 
 	_animate(){
@@ -454,7 +490,7 @@ class GLWrapper extends Component{
 		this.globeMesh.material.uniforms.uUseTexture.value = 1.0;
 		this.globeMesh.material.uniforms.uUsePickingTexture.value = 1.0;
 		this.renderer.render(
-			this.sceneGlobe,
+			this.sceneGlobePicking,
 			this.camera,
 			this.renderTargetPicking,
 			true
@@ -468,8 +504,21 @@ class GLWrapper extends Component{
 			pixelBuffer);
 
 		//Reverse engineer country code from color buffer value
-		const countryCode = colorToNum(pixelBuffer[0]/255, pixelBuffer[1]/255, pixelBuffer[2]/255);
-		console.log(countryCode);
+		const countryCode = colorToNum(pixelBuffer[0], pixelBuffer[1], pixelBuffer[2]);
+		
+		//Update the corresponding size attribute of the particles
+		this.particleData.forEach(p => {
+			p.size = p.triggeredBy===countryCode?3.0:2.0
+		});
+
+		this._updateParticles(
+				this.particleData,
+				false,
+				false,
+				false,
+				true, //only update size attribute
+				false
+			);
 		
 	}
 
@@ -498,7 +547,10 @@ class GLWrapper extends Component{
 						c0:spline.c0,
 						c1:spline.c1,
 						t: 1/nParticles * i,
-						position: spline.getPoint(1/nParticles * i)
+						position: spline.getPoint(1/nParticles * i),
+						size:2.0,
+						color:new THREE.Color(0xffff00),
+						triggeredBy:od.destCode
 					}));
 
 				}else{
@@ -513,7 +565,10 @@ class GLWrapper extends Component{
 						c0:spline.c1,
 						c1:spline.c0,
 						t: 1/nParticles * i,
-						position: spline.getPoint(1/nParticles * i)
+						position: spline.getPoint(1/nParticles * i),
+						size:2.0,
+						color:new THREE.Color(0x00e0ff),
+						triggeredBy:od.originCode
 					}));
 				}
 
