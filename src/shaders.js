@@ -71,7 +71,7 @@ export const particleVS = `
 		}
 
 		v_t = sin(pct * PI);
-		v_color = color;
+		v_color = color.rgb;
 		v_size = size;
 
 		vec3 interpolatedPosition = cubicBezier(p0,c0,c1,p1,pct);
@@ -90,12 +90,8 @@ export const particleFS = `
 	varying float v_size;
 
 	void main(){
-		vec3 color = vec3(1.0, 1.0, 1.0);
-		if(v_size > 2.0){
-			//particle is on a selected path
-			color = vec3(1.0, 0.1, 0.0);
-		}
-		gl_FragColor = vec4(color * v_t, 0.1);
+		vec3 color = v_color;
+		gl_FragColor = vec4(color.rgb * v_t, 0.1);
 	}
 `;
 

@@ -207,7 +207,7 @@ class GLWrapper extends Component{
 		//When props.country changes...
 		//Update camera location based on props.country
 		if(centroids && country && (country !== prevProps.country)){
-			const o = [45,-15];
+			const o = [35,-12];
 			const c = centroids.get(country);
 			//new camera location
 			const cameraPosition = project(
@@ -300,7 +300,7 @@ class GLWrapper extends Component{
 		particlesGeometry.addAttribute('c1', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 3));
 		particlesGeometry.addAttribute('t', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*1), 1));
 		particlesGeometry.addAttribute('size', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*1), 1));
-		particlesGeometry.addAttribute('color', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 1));
+		particlesGeometry.addAttribute('color', new THREE.BufferAttribute(new Float32Array(NUM_PARTICLES*3), 3));
 		const particlesMaterial = new THREE.RawShaderMaterial({
 			vertexShader: particleVS,
 			fragmentShader: particleFS,
@@ -424,6 +424,8 @@ class GLWrapper extends Component{
 		
 		//After updating attributes, update draw range
 		this.particles.geometry.setDrawRange(0, particleData.length);
+
+		console.log(particleData)
 	}
 
 	_animate(){
@@ -508,7 +510,7 @@ class GLWrapper extends Component{
 		
 		//Update the corresponding size attribute of the particles
 		this.particleData.forEach(p => {
-			p.size = p.triggeredBy===countryCode?3.0:2.0
+			p.size = p.triggeredBy===countryCode?15.0:2.0
 		});
 
 		this._updateParticles(
