@@ -72,22 +72,30 @@ const YearSelectWidget = headerWidget(YearSelect);
 const headerStyle = {
 	position:'absolute',
 	padding:'32px 16px',
-	width:'100%'
+	width:'100%',
+	zIndex:999
 };
 
-const Header = ({years, year, onYearChange, countries, country, onCountryChange}) => (<header
+const Header = ({years, year, onYearChange, countries, country, onCountryChange, toggleCredits, isCreditsOpen}) => (<header
 		style={headerStyle}
 	>
-		<h1
-			style={{
-				fontFamily: 'Playfair Display',
-				fontWeight: '400',
-				fontSize: '1.5rem',
-				color:'#eee',
-				display:'inline'
-			}}
-		>
-			UN Migration
+		<h1 style={{display:'inline'}}>
+			<a 
+				href='#' 
+				style={{
+					fontFamily: 'Playfair Display',
+					fontWeight: '400',
+					fontSize: '1.5rem',
+					color:isCreditsOpen?'#444':'#eee',
+					transition:'all .2s'
+				}}
+				onClick={e => {
+					e.preventDefault();
+					toggleCredits();
+				}}
+			>
+				UN Migration
+			</a>
 		</h1>
 		{countries && <CountrySelectWidget
 			countries={countries}

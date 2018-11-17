@@ -135,6 +135,8 @@ class GLWrapper extends Component{
 					geojson,
 					centroids
 				});
+
+				this.props.onLoadingComplete();
 			});
 
 	}

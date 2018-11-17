@@ -10,7 +10,8 @@ import {
 import GLWrapper from './GLWrapper';
 import Header from './Header';
 import ChartContainer from './ChartContainer';
-
+import Credits from './Credits';
+import LoadingStatus from './LoadingStatus';
 
 class App extends Component{
 
@@ -25,7 +26,9 @@ class App extends Component{
 			countryCode: null,
 			countryName: null,
 			country: 840, //Default to US
-			year: 2017, //Default to 2017
+			year: 2017, //Default to 2017,
+			isCreditsOpen: false,
+			isDataLoading: true
 		}
 
 	}
@@ -55,7 +58,16 @@ class App extends Component{
 
 	render(){
 
-		const {data,countryCode,countryName,country,year,width,height} = this.state;
+		const {
+			data,
+			countryCode,
+			countryName,
+			country,
+			year,
+			width,height,
+			isCreditsOpen,
+			isDataLoading
+		} = this.state;
 
 		//Compute derived data
 		let chartData = null;
@@ -82,12 +94,15 @@ class App extends Component{
 					years={years}
 					year={year}
 					onYearChange={year => { this.setState({year: +year}) }}
+					toggleCredits={() => { this.setState({isCreditsOpen:!this.state.isCreditsOpen}) }}
+					isCreditsOpen={isCreditsOpen}
 				/>
 				<GLWrapper
 					width={width}
 					height={height}
 					data={glData}
 					country={country}
+					onLoadingComplete={()=>{ this.setState({isDataLoading:false}) }}
 				/>
 				<ChartContainer
 					width={width}
@@ -96,6 +111,8 @@ class App extends Component{
 					country={country}
 					year={year}
 				/>
+				<Credits isOpen={isCreditsOpen}/>
+				{isDataLoading && <LoadingStatus />}
 			</div>
 		)
 
