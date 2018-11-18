@@ -31,6 +31,7 @@ class GLWrapper extends Component{
 		this._updateParticles = this._updateParticles.bind(this);
 		this._animate = this._animate.bind(this);
 		this._onMousemove = this._onMousemove.bind(this);
+		this._highlightTarget = this._highlightTarget.bind(this);
 
 		this.state = {
 			//data states
@@ -507,10 +508,14 @@ class GLWrapper extends Component{
 
 		//Reverse engineer country code from color buffer value
 		const countryCode = colorToNum(pixelBuffer[0], pixelBuffer[1], pixelBuffer[2]);
+		this._highlightTarget(countryCode);
 		
+	}
+
+	_highlightTarget(code){
 		//Update the corresponding size attribute of the particles
 		this.particleData.forEach(p => {
-			p.size = p.triggeredBy===countryCode?15.0:2.0
+			p.size = p.triggeredBy===code?15.0:2.0
 		});
 
 		this._updateParticles(
@@ -521,7 +526,6 @@ class GLWrapper extends Component{
 				true, //only update size attribute
 				false
 			);
-		
 	}
 
 	_generateParticleData(data, splines){
