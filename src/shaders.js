@@ -84,14 +84,17 @@ export const particleVS = `
 export const particleFS = `
 	precision mediump float;
 
-	//uniform sampler2D texture;
+	uniform sampler2D texture;
 	varying float v_t;
 	varying vec3 v_color;
 	varying float v_size;
 
 	void main(){
-		vec3 color = v_color;
-		gl_FragColor = vec4(color.rgb * v_t, 0.1);
+		vec4 color = vec4(v_color.rgb * v_t, 0.8);
+		gl_FragColor = color;
+		if(v_size > 2.0){
+			gl_FragColor = gl_FragColor * texture2D(texture, gl_PointCoord);
+		}
 	}
 `;
 
@@ -129,6 +132,6 @@ export const particlesPassFS = `
 	void main(){
 		vec3 current = texture2D(tCurrent, v_uv).rgb;
 		vec3 prev = texture2D(tPrev, v_uv).rgb;
-		gl_FragColor = vec4(current + prev * 0.7, 1.0);
+		gl_FragColor = vec4(current + prev * 0.8, 1.0);
 	}
 `;

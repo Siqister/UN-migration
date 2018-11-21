@@ -19,6 +19,8 @@ import {
 	particleVS, particleFS, 
 	quadVS, finalPassFS, particlesPassFS} from '../shaders';
 
+import particleTexture from '../spark1.png';
+
 class GLWrapper extends Component{
 
 	constructor(props){
@@ -305,8 +307,10 @@ class GLWrapper extends Component{
 		const particlesMaterial = new THREE.RawShaderMaterial({
 			vertexShader: particleVS,
 			fragmentShader: particleFS,
+			blending: THREE.AdditiveBlending,
 			uniforms:{
-				tOffset: {value: 0.0}
+				tOffset: {value: 0.0},
+				texture: {value: new THREE.TextureLoader().load(particleTexture)}
 			}
 		});
 		this.particles = new THREE.Points(
@@ -513,9 +517,12 @@ class GLWrapper extends Component{
 	}
 
 	_highlightTarget(code){
+
+		if(!this.particleData) return;
+		
 		//Update the corresponding size attribute of the particles
 		this.particleData.forEach(p => {
-			p.size = p.triggeredBy===code?15.0:2.0
+			p.size = p.triggeredBy===code?20.0:2.0
 		});
 
 		this._updateParticles(
