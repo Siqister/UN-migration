@@ -132,6 +132,6 @@ export const particlesPassFS = `
 	void main(){
 		vec3 current = texture2D(tCurrent, v_uv).rgb;
 		vec3 prev = texture2D(tPrev, v_uv).rgb;
-		gl_FragColor = vec4(current + prev * 0.8, 1.0);
+		gl_FragColor = vec4(current + prev * 0.75, 1.0);
 	}
 `;

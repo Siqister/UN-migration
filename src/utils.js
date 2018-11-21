@@ -20,16 +20,17 @@ const zipDataToCode = ([data, code]) => {
 
 	const ODData = [];
 
-	data.forEach(o => {
-		const od = o.dest
+	data.forEach(d => {
+		const od = d.origin
 			.filter(d => d.v > 0)
-			.map(d => ({
-				origin: o.origin,
-				originCode: code.get(o.origin),
-				dest: d.geographyName,
-				destCode: code.get(d.geographyName),
-				v: d.v,
-				year: o.year
+			.map(o => ({
+				origin: o.geographyName,
+				originCode: code.get(o.geographyName),
+				dest: d.dest,
+				destCode: code.get(d.dest),
+
+				v: o.v,
+				year: d.year
 			}))
 			.filter(od => od.originCode && od.destCode);
 
@@ -103,7 +104,7 @@ function parseMigration(d){
 
 	const year = +d.Year;
 	const code = +d.Code;
-	const origin = d["Major area, region, country or area of destination"];
+	const dest = d["Major area, region, country or area of destination"];
 
 	delete d.Year;
 	delete d["Sort order"];
@@ -116,8 +117,8 @@ function parseMigration(d){
 	return {
 		year,
 		code,
-		origin,
-		dest: Object.entries(d).map(x => ({geographyName: x[0], v: x[1] === '..'?0:+x[1].replace(/,/g, '')}))
+		dest,
+		origin: Object.entries(d).map(x => ({geographyName: x[0], v: x[1] === '..'?0:+x[1].replace(/,/g, '')}))
 	}
 
 }

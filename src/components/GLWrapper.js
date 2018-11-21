@@ -421,7 +421,6 @@ class GLWrapper extends Component{
 
 		if(updateColor){
 			const particleColor = particleData.map(d => [d.color.r, d.color.g, d.color.b]).reduce((acc,val) => acc.concat(val), [])
-			console.log(particleColor);
 			const particleColorAttribute = this.particles.geometry.getAttribute('color');
 			particleColorAttribute.copyArray(particleColor);
 			particleColorAttribute.needsUpdate = true;
@@ -429,8 +428,6 @@ class GLWrapper extends Component{
 		
 		//After updating attributes, update draw range
 		this.particles.geometry.setDrawRange(0, particleData.length);
-
-		console.log(particleData)
 	}
 
 	_animate(){
