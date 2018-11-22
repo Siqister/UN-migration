@@ -21,6 +21,8 @@ import {
 
 import particleTexture from '../spark1.png';
 
+import Tooltip from './Tooltip';
+
 class GLWrapper extends Component{
 
 	constructor(props){
@@ -41,7 +43,12 @@ class GLWrapper extends Component{
 			centroids: null,
 
 			//animation states
-			cameraLookat: [0,0,0]
+			cameraLookat: [0,0,0],
+
+			//related to mouse interaction
+			mouseX: null,
+			mouseY: null,
+			targetCountryCode: null
 		};
 
 		//Store a reference to particleData
@@ -182,7 +189,7 @@ class GLWrapper extends Component{
 
 		//When props.data changes
 		//When props.data becomes available, update webgl attributes
-		if(data && centroids){
+		if(data && centroids && (data !== prevProps.data)){
 			//Generate unique array of destinations
 			const destCodes = uniq(
 				data.map(od => od.originCode === country?od.destCode:od.originCode)
@@ -236,7 +243,8 @@ class GLWrapper extends Component{
 
 	render(){
 
-		const {width, height} = this.props;
+		const {width, height, countryName} = this.props;
+		const {mouseX, mouseY, targetCountryCode} = this.state;
 
 		return(
 			<div className='gl-wrapper'>
@@ -246,6 +254,11 @@ class GLWrapper extends Component{
 					ref={node => {this.canvasNode = node}}
 					onMouseMove={this._onMousemove}
 				/>
+				{targetCountryCode&&<Tooltip 
+					x={mouseX}
+					y={mouseY}
+					countryName={countryName.get(targetCountryCode)}
+				/>}
 			</div>
 		);
 
@@ -508,8 +521,18 @@ class GLWrapper extends Component{
 			pixelBuffer);
 
 		//Reverse engineer country code from color buffer value
-		const countryCode = colorToNum(pixelBuffer[0], pixelBuffer[1], pixelBuffer[2]);
-		this._highlightTarget(countryCode);
+		const targetCountryCode = colorToNum(pixelBuffer[0], pixelBuffer[1], pixelBuffer[2]);
+		
+		if(targetCountryCode > 0){
+			this._highlightTarget(targetCountryCode);
+
+			this.setState({
+				mouseX: x,
+				mouseY: y,
+				targetCountryCode
+			});
+		}
+		//this.setState({targetCountryCode});
 		
 	}
 

@@ -102,6 +102,7 @@ class App extends Component{
 					height={height}
 					data={glData}
 					country={country}
+					countryName={this.state.countryName}
 					onLoadingComplete={()=>{ this.setState({isDataLoading:false}) }}
 				/>
 				<ChartContainer
