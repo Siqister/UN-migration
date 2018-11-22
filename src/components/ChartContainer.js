@@ -106,6 +106,7 @@ class ChartContainer extends Component{
 					{chartsData.map((d,i) => 
 						<Chart 
 							width={chartWidth}
+							height={150}
 							key={i}
 							partnerName={countryName.get(+d.key)}
 							partner={d.key}

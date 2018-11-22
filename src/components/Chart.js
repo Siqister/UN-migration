@@ -12,6 +12,8 @@ const chartStyle = {
 	float:'left',
 	width:'128px',
 	height:'100%',
+	background:'rgba(0,0,0,0)',
+	transition:'all .2s'
 }
 
 const pathStyle = {
@@ -53,7 +55,6 @@ class Chart extends Component{
 		super(props);
 
 		this.margin = {t:40,r:24,b:24,l:16}
-
 		this.containerRef = null;
 		this.axisRef = {
 			out:null, //top
@@ -70,19 +71,26 @@ class Chart extends Component{
 
 		this.state = {
 			innerW: 0,
-			innerH: 0
+			innerH: 0,
+			currentHeight: 0,
+			expandedHeight: 400,
+			expanded: false
 		}
+
+		this._onMouseenter = this._onMouseenter.bind(this);
+		this._onMouseleave = this._onMouseleave.bind(this);
 
 	}
 
 	componentDidMount(){
 
-		const {max,data,country} = this.props;
+		const {max,data,country,width,height} = this.props;
 
-		//Recompute visual attributes of all <svg> elements (without rerendering them)
+		//Recompute visual attributes of all <svg> elements
 		this.setState({
-			innerW: this.containerRef.clientWidth - this.margin.l - this.margin.r,
-			innerH: this.containerRef.clientHeight - this.margin.t - this.margin.b
+			innerW: width - this.margin.l - this.margin.r,
+			innerH: height - this.margin.t - this.margin.b,
+			currentHeight: height
 		});
 
 		//Update SVG attributes
@@ -96,21 +104,31 @@ class Chart extends Component{
 
 	render(){
 
-		const {width,partner,partnerName,country,max,data} = this.props;
-		const {innerW, innerH} = this.state;
+		const {width,height,partner,partnerName,country,max,data} = this.props;
+		const {innerW,innerH,expanded,currentHeight} = this.state;
 
 		return (
 			<div 
 				className='chart' 
-				style={Object.assign({}, chartStyle, {width:`${width}px`})}
+				style={Object.assign({}, chartStyle, {
+					width:`${width}px`,
+					transform:`translate(0,${height - currentHeight}px)`,
+					height:`${currentHeight}px`, 
+					background:expanded?'#111':null
+				})}
 				ref={ref => this.containerRef = ref}
+				onMouseEnter={this._onMouseenter}
+				onMouseLeave={this._onMouseleave}
 			>
-				<svg width={width}>
+				<svg width={width} height={currentHeight}>
 					<g className='plot' transform={`translate(${this.margin.l},${this.margin.t})`} >
 						<g className='top out' transform={`translate(0, 0)`}>
 							<path
 								className='series out'
-								style={Object.assign({}, pathStyle, {fill:colors.out})}
+								style={Object.assign({}, pathStyle, {
+									fill:colors.out,
+									fillOpacity:expanded?1.0:0.8
+								})}
 								ref={ref => this.pathRef.out = ref}
 							/>
 							<g className='axis-y axis-y-top' ref={ref => this.axisRef.out = ref} />
@@ -118,7 +136,10 @@ class Chart extends Component{
 						<g className='bottom in' transform={`translate(0, ${innerH/2})`}>
 							<path
 								className='series in'
-								style={Object.assign({}, pathStyle, {fill:colors.in})}
+								style={Object.assign({}, pathStyle, {
+									fill:colors.in,
+									fillOpacity:expanded?1.0:0.8
+								})}
 								ref={ref => this.pathRef.in = ref}
 							/>
 							<g className='axis-y axis-y-bottom' ref={ref => this.axisRef.in = ref} />
@@ -128,7 +149,7 @@ class Chart extends Component{
 								className='readout out'
 								ref={ref => this.readoutRef.out = ref}
 							>
-								<circle r={4} style={Object.assign({}, readoutCircleStyle, {fill:colors.out})} /> 
+								<circle r={4} style={Object.assign({}, readoutCircleStyle, {fill:colors.out,})} /> 
 								<text dy={-10}/>
 							</g>
 						</g>
@@ -157,17 +178,35 @@ class Chart extends Component{
 
 	}
 
+	_onMouseenter(){
+		const targetHeight = this.state.expandedHeight;
+		this.setState({
+			innerH: targetHeight - this.margin.t - this.margin.b,
+			currentHeight: targetHeight,
+			expanded: true
+		});
+	}
+
+	_onMouseleave(){
+		const targetHeight = this.props.height;
+		this.setState({
+			innerH: targetHeight - this.margin.t - this.margin.b,
+			currentHeight: targetHeight,
+			expanded: false
+		});
+	}
+
 	_updateSVGAttr(){
 
 		const {max,data,country,year} = this.props;
-		const {innerW, innerH} = this.state;
+		const {innerW, innerH, expanded} = this.state;
 
 		//Set scales and axes
 		scaleX.domain([1990, 2017]).range([0, innerW]);
 		scaleYTop.domain([0, max*1.2]).range([innerH/2, 0]);
 		scaleYBottom.domain([0, max*1.2]).range([0, innerH/2]);
-		axisYTop.tickSize(-innerW);
-		axisYBottom.tickSize(-innerW);
+		axisYTop.tickSize(-innerW).ticks(expanded?4:2);
+		axisYBottom.tickSize(-innerW).ticks(expanded?4:2);
 
 		//Set visual attributes
 		//Axes
