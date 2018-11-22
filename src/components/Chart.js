@@ -1,5 +1,5 @@
 import React, {Component} from 'react';
-import {scaleLinear,line,axisLeft,select} from 'd3';
+import {scaleLinear,area,axisLeft,select} from 'd3';
 
 const fontStyle = {
 	fontFamily: 'Playfair Display',
@@ -15,9 +15,7 @@ const chartStyle = {
 }
 
 const pathStyle = {
-	fill:'none',
-	stroke:'yellow',
-	strokeWidth:'1.5px'
+	fillOpacity:.8
 }
 
 const readoutCircleStyle = {
@@ -33,15 +31,19 @@ const colors = {
 
 //Shared line + axis generators, and scales
 const scaleX = scaleLinear();
-const scaleY = scaleLinear();
+const scaleYTop = scaleLinear();
+const scaleYBottom = scaleLinear();
 
-const lineGenerator = line()
-	.x(d => scaleX(d.year))
-	.y(d => scaleY(d.v));
+const lineGenerator = area()
+	.x(d => scaleX(d.year));
 
-const axisY = axisLeft()
-	.scale(scaleY)
-	.ticks(3)
+const axisYTop = axisLeft()
+	.scale(scaleYTop)
+	.ticks(2)
+	.tickFormat(d => d/1000+'k');
+const axisYBottom = axisLeft()
+	.scale(scaleYBottom)
+	.ticks(2)
 	.tickFormat(d => d/1000+'k');
 
 
@@ -50,12 +52,13 @@ class Chart extends Component{
 	constructor(props){
 		super(props);
 
-		this.innerW = 0;
-		this.innerH = 0;
 		this.margin = {t:40,r:24,b:24,l:16}
 
 		this.containerRef = null;
-		this.axisRef = null;
+		this.axisRef = {
+			out:null, //top
+			in:null //bottom
+		};
 		this.pathRef = {
 			out:null,
 			in:null
@@ -65,6 +68,11 @@ class Chart extends Component{
 			in:null
 		};
 
+		this.state = {
+			innerW: 0,
+			innerH: 0
+		}
+
 	}
 
 	componentDidMount(){
@@ -72,8 +80,10 @@ class Chart extends Component{
 		const {max,data,country} = this.props;
 
 		//Recompute visual attributes of all <svg> elements (without rerendering them)
-		this.innerW = this.containerRef.clientWidth - this.margin.l - this.margin.r;
-		this.innerH = this.containerRef.clientHeight - this.margin.t - this.margin.b;
+		this.setState({
+			innerW: this.containerRef.clientWidth - this.margin.l - this.margin.r,
+			innerH: this.containerRef.clientHeight - this.margin.t - this.margin.b
+		});
 
 		//Update SVG attributes
 		this._updateSVGAttr();
@@ -87,6 +97,7 @@ class Chart extends Component{
 	render(){
 
 		const {width,partner,partnerName,country,max,data} = this.props;
+		const {innerW, innerH} = this.state;
 
 		return (
 			<div 
@@ -96,26 +107,40 @@ class Chart extends Component{
 			>
 				<svg width={width}>
 					<g className='plot' transform={`translate(${this.margin.l},${this.margin.t})`} >
-						<g className='axis-y' ref={ref => this.axisRef = ref} />
-						{data.map(series => {
-								const direction = +series.key === country ? 'out':'in';
-								const color = colors[direction];
-								return (<g key={series.key}>
-									<path 
-										className={`series ${direction}`}
-										style={Object.assign({}, pathStyle, {stroke:color})}
-										ref={ref => {this.pathRef[direction] = ref;}}
-									/>
-									<g
-										className={`readout ${direction}`}
-										ref={ref => {this.readoutRef[direction] = ref;}}
-									>
-										<circle r={4} style={Object.assign({}, readoutCircleStyle, {fill:color})} />
-										<text></text>
-									</g>
-								</g>);
-							}
-						)}
+						<g className='top out' transform={`translate(0, 0)`}>
+							<path
+								className='series out'
+								style={Object.assign({}, pathStyle, {fill:colors.out})}
+								ref={ref => this.pathRef.out = ref}
+							/>
+							<g className='axis-y axis-y-top' ref={ref => this.axisRef.out = ref} />
+						</g>
+						<g className='bottom in' transform={`translate(0, ${innerH/2})`}>
+							<path
+								className='series in'
+								style={Object.assign({}, pathStyle, {fill:colors.in})}
+								ref={ref => this.pathRef.in = ref}
+							/>
+							<g className='axis-y axis-y-bottom' ref={ref => this.axisRef.in = ref} />
+						</g>
+						<g className='readout-container top out' transform={`translate(0, 0)`}>
+							<g
+								className='readout out'
+								ref={ref => this.readoutRef.out = ref}
+							>
+								<circle r={4} style={Object.assign({}, readoutCircleStyle, {fill:colors.out})} /> 
+								<text dy={-10}/>
+							</g>
+						</g>
+						<g className='readout-container bottom in' transform={`translate(0, ${innerH/2})`}>
+							<g
+								className='readout in'
+								ref={ref => this.readoutRef.in = ref}
+							>
+								<circle r={4} style={Object.assign({}, readoutCircleStyle, {fill:colors.in})} /> 
+								<text dy={15}/>
+							</g>
+						</g>
 					</g>
 					<text 
 						style={fontStyle}
@@ -135,39 +160,44 @@ class Chart extends Component{
 	_updateSVGAttr(){
 
 		const {max,data,country,year} = this.props;
+		const {innerW, innerH} = this.state;
 
 		//Set scales and axes
-		scaleX.domain([1990, 2017]).range([0, this.innerW]);
-		scaleY.domain([0, max*1.2]).range([this.innerH, 0]);
-		axisY.tickSize(-this.innerW);
+		scaleX.domain([1990, 2017]).range([0, innerW]);
+		scaleYTop.domain([0, max*1.2]).range([innerH/2, 0]);
+		scaleYBottom.domain([0, max*1.2]).range([0, innerH/2]);
+		axisYTop.tickSize(-innerW);
+		axisYBottom.tickSize(-innerW);
 
 		//Set visual attributes
-		select(this.axisRef).transition().call(axisY);
-		select(this.axisRef)
-			.select('.domain').style('display','none')
-			.select(function(){ return this.parentNode })
-			.selectAll('line')
-				.style('stroke','#666')
-				.style('stroke-dasharray','2px 2px')
-			.select(function(){ return this.parentNode })
-			.selectAll('text')
-				.style('fill','#666')
-				.style('font-size','8px')
-				.attr('text-anchor','start')
-				.attr('dy', -5);
+		//Axes
+		select(this.axisRef.out).transition().call(axisYTop);
+		select(this.axisRef.out).call(this._setAxisStyle);
+		select(this.axisRef.in).transition().call(axisYBottom);
+		select(this.axisRef.in).call(this._setAxisStyle);
 
+		//Series and readout
 		data.forEach(series => {
 			let path;
 			let readout;
+			let scaleY;
 
 			if(+series.key === country){
-				//origin = country i.e. outbound
+				//origin = country i.e. out
 				path = this.pathRef.out;
 				readout = this.readoutRef.out;
+				scaleY = scaleYTop;
+				lineGenerator
+					.y0(innerH/2)
+					.y1(d => scaleY(d.v));
 			}else{
 				//origin = partner i.e. inbound
 				path = this.pathRef.in;
 				readout = this.readoutRef.in;
+				scaleY = scaleYBottom;
+				lineGenerator
+					.y0(0)
+					.y1(d => scaleY(d.v));
 			}
 
 			select(path)
@@ -179,18 +209,30 @@ class Chart extends Component{
 			if(!readoutValue) return;
 
 			select(readout)
-				//.transition()
-				.attr('transform', `translate(${scaleX(readoutValue.year)}, ${scaleY(readoutValue.v)})`);
-			select(readout)
+				.attr('transform', `translate(${scaleX(readoutValue.year)}, ${scaleY(readoutValue.v)})`)
 				.select('text')
 				.text(readoutValue.v)
 				.style('fill','#ccc')
 				.style('font-size','8px')
-				.attr('text-anchor','middle')
-				.attr('dy', -5);
+				.attr('text-anchor','middle');
 
 		});
 
+	}
+
+	_setAxisStyle(selection){
+		selection
+			.select('.domain').style('display','none')
+			.select(function(){ return this.parentNode })
+			.selectAll('line')
+				.style('stroke','#666')
+				.style('stroke-dasharray','2px 2px')
+			.select(function(){ return this.parentNode })
+			.selectAll('text')
+				.style('fill','#666')
+				.style('font-size','8px')
+				.attr('text-anchor','start')
+				.attr('dy', -5);
 	}
 
 }
